@@ -170,6 +170,7 @@ jobs:
             'lib/screens/home_screen.dart:150:175' \
             'lib/screens/vehicle_info_screen.dart:1:18' \
             'lib/services/bluetooth_service.dart:1:260' \
+            'lib/services/obd_service.dart:1:260' \
             'lib/services/bluetooth_service.dart:145:190'
           do
             file="$(printf '%s' "$spec" | cut -d: -f1)"
@@ -178,6 +179,9 @@ jobs:
             echo "---- $file:$start-$end ----"
             awk -v s="$start" -v e="$end" 'NR >= s && NR <= e { printf "%5d %s\n", NR, $0 }' "$file"
           done
+
+      - name: Apply audited Dart source fixes
+        run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
 
       - name: Analyze Dart
         working-directory: ${{ env.PROJECT_DIR }}

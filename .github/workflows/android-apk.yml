@@ -126,6 +126,7 @@ jobs:
               print('Normalized build declarations in: ' + ', '.join(updated_files))
           else:
               print('No Android/Kotlin plugin declaration needed upgrading.')
+          PY
           WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
           if [ ! -f "$WRAPPER" ]; then
             echo "::warning::Gradle wrapper properties are missing; creating a compatible distribution configuration."

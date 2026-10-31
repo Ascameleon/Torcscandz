@@ -3,6 +3,10 @@ name: Android APK Build
 on:
   push:
     branches: [main]
+    paths:
+      - 'DzTorqscan_v1.4.0_complete.zip'
+      - 'DzTorqscan_source_recovery_*.zip'
+      - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,168 +21,106 @@ jobs:
     name: Build and verify Android app
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Locate and extract Flutter source
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Extract Flutter project
         shell: bash
         run: |
           set -euo pipefail
-          ARCHIVE="DzTorqscan_v1.4.0_complete.zip"
-          if [ ! -f "$ARCHIVE" ]; then
-            ARCHIVE="$(find . -maxdepth 1 -name 'DzTorqscan_source_recovery_*.zip' -print | sort -V | tail -n 1)"
+          archive='DzTorqscan_v1.4.0_complete.zip'
+          if [ ! -f "$archive" ]; then
+            archive="$(find . -maxdepth 1 -type f -name 'DzTorqscan_source_recovery_*.zip' -print | sort -V | tail -n 1)"
           fi
-          if [ -z "$ARCHIVE" ] || [ ! -f "$ARCHIVE" ]; then
-            echo "::error::No Dz Torqscan source archive found in repository root."
+          if [ -z "$archive" ] || [ ! -f "$archive" ]; then
+            echo '::error::No TorqScan source archive found.'
             exit 1
           fi
           mkdir -p extracted
-          unzip -q "$ARCHIVE" -d extracted
-          PUBSPEC="$(find extracted -name pubspec.yaml -not -path '*/.dart_tool/*' -print -quit)"
-          if [ -z "$PUBSPEC" ]; then
-            echo "::error::No pubspec.yaml found in source archive; it may not contain a complete Flutter project."
-            find extracted -maxdepth 3 -type f | head -80
+          unzip -q "$archive" -d extracted
+          pubspec="$(find extracted -type f -name pubspec.yaml -not -path '*/.dart_tool/*' -print -quit)"
+          if [ -z "$pubspec" ]; then
+            echo '::error::No pubspec.yaml found in the source archive.'
+            find extracted -maxdepth 4 -type f | head -80
             exit 1
           fi
-          PROJECT_DIR="$(dirname "$PUBSPEC")"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Flutter project found at: $PROJECT_DIR"
+          project_dir="$(dirname "$pubspec")"
+          echo "PROJECT_DIR=$project_dir" >> "$GITHUB_ENV"
+          echo "Using Flutter project: $project_dir"
 
-      - name: Normalize Android build plugin versions
+      - name: Normalize Android Gradle configuration
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          SETTINGS=""
-          for candidate in android/settings.gradle android/settings.gradle.kts; do
-            if [ -f "$candidate" ]; then SETTINGS="$candidate"; break; fi
-          done
-          if [ -z "$SETTINGS" ]; then
-            echo "::error::Android settings.gradle not found."
-            exit 1
-          fi
+          test -d android
           python3 - <<'PY'
           from pathlib import Path
           import re
 
+          root = Path('android')
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}
-          version_pattern = re.compile(r'(?<!\d)(\d+)\.(\d+)\.(\d+)(?!\d)')
-          agp_key = re.compile(r'(?im)^\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=')
-          search_roots = (Path('.'), Path('..'))
-          paths = set()
-          for root in search_roots:
-              paths.update(path for path in root.rglob('*') if path.is_file() and path.suffix in suffixes)
+          kotlin_plugin = re.compile(r"(org\.jetbrains\.kotlin[^\n]*?version\s*['"])(\d+\.\d+\.\d+)(['"])", re.I)
+          kotlin_property = re.compile(r"(?im)(kotlin_version\s*=\s*['"]?)(\d+\.\d+\.\d+)(['"]?)")
+          kotlin_catalog = re.compile(r"(?im)^(\s*kotlin[\w.-]*\s*=\s*['"])(\d+\.\d+\.\d+)(['"])")
+          agp_plugin = re.compile(r"(com\.android\.application[^\n]*?version\s*['"]|com\.android\.tools\.build:gradle:)(\d+\.\d+\.\d+)", re.I)
+          agp_catalog = re.compile(r"(?im)^(\s*(?:agp|androidGradlePlugin|android_gradle_plugin)\s*=\s*['"])(\d+\.\d+\.\d+)(['"])")
 
-          updated_files = []
-          for path in sorted(paths):
-              if any(part in {'.git', 'build', '.dart_tool'} for part in path.parts):
+          def bump_kotlin(match):
+              version = tuple(int(part) for part in match.group(2).split('.'))
+              return f"{match.group(1)}2.2.20{match.group(3)}" if version < (2, 2, 20) else match.group(0)
+
+          def pin_agp(match):
+              major = int(match.group(2).split('.')[0])
+              return f"{match.group(1)}8.11.1" if major >= 9 else match.group(0)
+
+          changed = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file() or path.suffix not in suffixes:
                   continue
               try:
                   original = path.read_text()
-              except (UnicodeDecodeError, OSError):
+              except (OSError, UnicodeDecodeError):
                   continue
-
-              updated = original
-              lowered = updated.lower()
-
-              # Normalize every Kotlin plugin declaration and version-catalog key to Flutter's minimum.
-              def bump_kotlin(match):
-                  version = tuple(int(part) for part in match.group(2).split('.'))
-                  return f"{match.group(1)}2.2.20{match.group(3) or ''}" if version < (2, 2, 20) else match.group(0)
-
-              if 'org.jetbrains.kotlin' in lowered:
-                  updated = re.sub(
-                      r'(?i)(org\.jetbrains\.kotlin[^\n]*?version\s*["\'])(\d+\.\d+\.\d+)(["\'])',
-                      bump_kotlin,
-                      updated,
-                  )
-
-              if 'kotlin_version' in lowered:
-                  updated = re.sub(
-                      r'(?im)(kotlin_version\s*=\s*["\']?)(\d+\.\d+\.\d+)(["\']?)',
-                      bump_kotlin,
-                      updated,
-                  )
-
-              # Also catch version-catalog aliases such as kotlin, kotlinVersion, or kotlin-android.
-              updated = re.sub(
-                  r'(?im)^([\s\w.-]*kotlin[\w.-]*\s*=\s*["\'])(\d+\.\d+\.\d+)(["\'])',
-                  bump_kotlin,
+              updated = kotlin_plugin.sub(bump_kotlin, original)
+              updated = kotlin_property.sub(bump_kotlin, updated)
+              updated = kotlin_catalog.sub(bump_kotlin, updated)
+              updated = agp_plugin.sub(pin_agp, updated)
+              updated = agp_catalog.sub(
+                  lambda m: f"{m.group(1)}8.11.1{m.group(3)}"
+                  if int(m.group(2).split('.')[0]) >= 9 else m.group(0),
                   updated,
               )
-
-              # Pin any AGP 9+ declaration to 8.11.1, paired with Gradle 8.14.3.
-              def pin_agp(match):
-                  version = match.group(2)
-                  return f"{match.group(1)}8.11.1" if int(version.split(".")[0]) >= 9 else match.group(0)
-
-              if 'com.android' in lowered:
-                  updated = re.sub(
-                      r'(?i)(com\.android\.application[^\n]*?version\s*["\']|com\.android\.tools\.build:gradle:)(\d+\.\d+\.\d+)',
-                      pin_agp,
-                      updated,
-                  )
-              if agp_key.search(updated):
-                  updated = re.sub(
-                      r'(?im)^(\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=\s*["\'])(\d+\.\d+\.\d+)(["\'])',
-                      lambda match: f"{match.group(1)}8.11.1{match.group(3)}" if int(match.group(2).split(".")[0]) >= 9 else match.group(0),
-                      updated,
-                  )
-
               if updated != original:
                   path.write_text(updated)
-                  updated_files.append(str(path))
+                  changed.append(str(path))
 
-          stale = []
-          for path in sorted(paths):
-              if any(part in {'.git', 'build', '.dart_tool'} for part in path.parts):
-                  continue
-              try:
-                  text = path.read_text(errors='ignore')
-              except OSError:
-                  continue
-              lowered = text.lower()
-
-              if ('org.jetbrains.kotlin' in lowered or 'kotlin_version' in lowered
-                      or re.search(r'(?im)^\s*[\w.-]*kotlin[\w.-]*\s*=', text)):
-                  for match in version_pattern.finditer(text):
-                      version = tuple(int(part) for part in match.groups())
-                      if version < (2, 2, 20):
-                          stale.append((str(path), 'Kotlin', match.group(0)))
-
-              if 'com.android' in lowered or agp_key.search(text):
-                  agp_versions = re.findall(
-                      r'(?im)(?:com\.android\.application[^\n]*?version\s*["\']|com\.android\.tools\.build:gradle:|(?:^\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=\s*["\']))(\d+\.\d+\.\d+)',
-                      text,
-                  )
-                  for agp_version in agp_versions:
-                      if int(agp_version.split('.')[0]) >= 9:
-                          stale.append((str(path), 'Android Gradle Plugin', agp_version))
-
-          if stale:
-              for path, kind, version in stale:
-                  print(f'{path}: outdated {kind} version {version}')
-              raise SystemExit('::error::An outdated Android/Kotlin plugin version remains in Gradle configuration.')
-
-          print('Android Gradle Plugin and Kotlin plugin version floors verified.')
-          if updated_files:
-              print('Normalized build declarations in: ' + ', '.join(updated_files))
-          else:
-              print('No Android/Kotlin plugin declaration needed upgrading.')
-
-          for path in sorted(paths):
-              if path.name in {'settings.gradle', 'settings.gradle.kts', 'build.gradle', 'build.gradle.kts', 'libs.versions.toml'}:
-                  for line_no, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
+          print('Updated Gradle declarations:', ', '.join(changed) if changed else 'none')
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name in {'settings.gradle', 'settings.gradle.kts', 'build.gradle', 'build.gradle.kts', 'libs.versions.toml'}:
+                  for number, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
                       if any(token in line.lower() for token in ('kotlin', 'com.android', 'agp =')):
-                          print(f'{path}:{line_no}: {line.strip()}')
+                          print(f'{path}:{number}: {line.strip()}')
           PY
-          WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
-          if [ ! -f "$WRAPPER" ]; then
-            echo "::warning::Gradle wrapper properties are missing; creating a compatible distribution configuration."
-            mkdir -p "$(dirname "$WRAPPER")"
-            cat > "$WRAPPER" <<'EOF'
+          wrapper='android/gradle/wrapper/gradle-wrapper.properties'
+          mkdir -p android/gradle/wrapper
+          if [ -f "$wrapper" ]; then
+            sed -i -E 's#gradle-[0-9.]+-(all|bin)\.zip#gradle-8.14.3-\1.zip#' "$wrapper"
+          else
+            cat > "$wrapper" <<'PROPERTIES'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.3-bin.zip
@@ -186,12 +128,11 @@ jobs:
           validateDistributionUrl=true
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
-          EOF
-          else
-            sed -i -E 's#gradle-[0-9.]+-(all|bin)\.zip#gradle-8.14.3-\1.zip#' "$WRAPPER"
+          PROPERTIES
           fi
-          if [ ! -f android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "::warning::Gradle launcher or wrapper JAR is missing; creating a bounded Gradle 8.14.3 launcher."
+          touch android/gradle.properties
+          grep -q '^android.newDsl=false$' android/gradle.properties || printf '\nandroid.newDsl=false\n' >> android/gradle.properties
+          if [ ! -x android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
             cat > android/gradlew <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
@@ -214,39 +155,17 @@ jobs:
           SH
           fi
           chmod +x android/gradlew
-          echo "Gradle wrapper configuration:"
-          cat "$WRAPPER"
-          # Flutter's Gradle plugin currently requires the legacy Android DSL.
-          GRADLE_PROPERTIES="android/gradle.properties"
-          touch "$GRADLE_PROPERTIES"
-          if grep -qE '^[[:space:]]*android\.newDsl=' "$GRADLE_PROPERTIES"; then
-            sed -i -E 's/^[[:space:]]*android\.newDsl=.*/android.newDsl=false/' "$GRADLE_PROPERTIES"
-          else
-            printf '\nandroid.newDsl=false\n' >> "$GRADLE_PROPERTIES"
-          fi
-          grep -q '^android.newDsl=false
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+          cat "$wrapper"
 
-      - name: Cache manual Gradle distribution
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/manual
-          key: gradle-manual-8.14.3-${{ runner.os }}
-
-      - name: Set up Flutter stable
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
+      - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
-      - name: Run automated tests
+      - name: Analyze Dart
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run Dart tests
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
@@ -254,144 +173,24 @@ jobs:
           if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
             flutter test
           else
-            echo "::warning::No Dart automated tests found. Hardware validation is still required."
+            echo '::warning::No Dart test files found; hardware validation remains required.'
           fi
 
-      - name: Build installable Android APK
+      - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter build apk --release --no-pub --verbose
 
-      - name: Verify APK output
+      - name: Verify APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set -euo pipefail
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-          test -s "$APK"
-          sha256sum "$APK"
-          ls -lh "$APK"
+          apk='build/app/outputs/flutter-apk/app-release.apk'
+          test -s "$apk"
+          sha256sum "$apk"
+          ls -lh "$apk"
 
-      - name: Upload Android APK
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: torqscan-dz-android-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-          retention-days: 14
- "$GRADLE_PROPERTIES"
-
-      - name: Pin Kotlin Gradle Plugin to 2.2.20
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          SETTINGS=""
-          for candidate in android/settings.gradle android/settings.gradle.kts; do
-            if [ -f "$candidate" ]; then SETTINGS="$candidate"; break; fi
-          done
-          if [ -z "$SETTINGS" ]; then
-            echo "::error::Android settings.gradle not found for Kotlin plugin pin."
-            exit 1
-          fi
-          python3 - "$SETTINGS" <<'PY'
-          from pathlib import Path
-          import re
-          import sys
-
-          path = Path(sys.argv[1])
-          source = path.read_text()
-          if "useVersion('2.2.20')" in source or 'useVersion("2.2.20")' in source:
-              print("Kotlin Gradle Plugin already pinned to 2.2.20.")
-              raise SystemExit(0)
-
-          kts = path.suffix == ".kts"
-          if kts:
-              each_plugin = '''
-                  eachPlugin {
-                      if (requested.id.id.startsWith("org.jetbrains.kotlin")) {
-                          useVersion("2.2.20")
-                      }
-                  }
-              '''
-              resolution = "\n    resolutionStrategy {\n" + each_plugin + "\n    }\n"
-          else:
-              each_plugin = '''
-                  eachPlugin { requested ->
-                      if (requested.id.id.startsWith('org.jetbrains.kotlin')) {
-                          useVersion('2.2.20')
-                      }
-                  }
-              '''
-              resolution = "\n    resolutionStrategy {\n" + each_plugin + "\n    }\n"
-
-          strategy = re.search(r'(?m)^([ \t]*)resolutionStrategy\s*\{', source)
-          if strategy:
-              source = source[:strategy.end()] + each_plugin + source[strategy.end():]
-          else:
-              plugin_management = re.search(r'(?m)^([ \t]*)pluginManagement\s*\{', source)
-              if plugin_management:
-                  source = source[:plugin_management.end()] + resolution + source[plugin_management.end():]
-              else:
-                  if kts:
-                      source = 'pluginManagement {\n    resolutionStrategy {' + each_plugin + '\n    }\n}\n' + source
-                  else:
-                      source = "pluginManagement {\n    resolutionStrategy {" + each_plugin + "\n    }\n    repositories { google(); mavenCentral(); gradlePluginPortal() }\n}\n" + source
-
-          path.write_text(source)
-          if "org.jetbrains.kotlin" not in source or "2.2.20" not in source:
-              raise SystemExit("Failed to pin Kotlin Gradle Plugin to 2.2.20.")
-          print(f"Pinned Kotlin Gradle Plugin to 2.2.20 in {path}.")
-          PY
-          grep -q '2.2.20' "$SETTINGS"
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Cache manual Gradle distribution
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/manual
-          key: gradle-manual-8.14.3-${{ runner.os }}
-
-      - name: Set up Flutter stable
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter pub get
-
-      - name: Run automated tests
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
-            flutter test
-          else
-            echo "::warning::No Dart automated tests found. Hardware validation is still required."
-          fi
-
-      - name: Build installable Android APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release --no-pub --verbose
-
-      - name: Verify APK output
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          set -euo pipefail
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-          test -s "$APK"
-          sha256sum "$APK"
-          ls -lh "$APK"
-
-      - name: Upload Android APK
-        if: always()
+      - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: torqscan-dz-android-apk

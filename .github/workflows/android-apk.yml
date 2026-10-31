@@ -216,61 +216,7 @@ jobs:
           else
             printf '\nandroid.newDsl=false\n' >> "$GRADLE_PROPERTIES"
           fi
-          grep -q '^android.newDsl=false
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Cache manual Gradle distribution
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/manual
-          key: gradle-manual-8.14.3-${{ runner.os }}
-
-      - name: Set up Flutter stable
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter pub get
-
-      - name: Run automated tests
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
-            flutter test
-          else
-            echo "::warning::No Dart automated tests found. Hardware validation is still required."
-          fi
-
-      - name: Build installable Android APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release --no-pub --verbose
-
-      - name: Verify APK output
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          set -euo pipefail
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-          test -s "$APK"
-          sha256sum "$APK"
-          ls -lh "$APK"
-
-      - name: Upload Android APK
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: torqscan-dz-android-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-          retention-days: 14
- "$GRADLE_PROPERTIES"
+          grep -q '^android.newDsl=false$' "$GRADLE_PROPERTIES"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4

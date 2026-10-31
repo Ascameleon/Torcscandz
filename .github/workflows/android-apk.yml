@@ -30,7 +30,7 @@ jobs:
           if [ ! -f "$ARCHIVE" ]; then
             ARCHIVE="$(find . -maxdepth 1 -name 'DzTorqscan_source_recovery_*.zip' -print | sort -V | tail -n 1)"
           fi
-          if [ -z "${ARCHIVE:-}" ] || [ ! -f "$ARCHIVE" ]; then
+          if [ -z "$ARCHIVE" ] || [ ! -f "$ARCHIVE" ]; then
             echo "::error::No Dz Torqscan source archive found in repository root."
             exit 1
           fi
@@ -63,10 +63,10 @@ jobs:
           from pathlib import Path
           import re
           patterns = [
-              (re.compile(r'(?i)(kotlin_version\\s*=\\s*[\\\'" ]+)2\\.\\d+\\.\\d+'), r'\\g<1>2.2.20'),
-              (re.compile(r'(?i)(kotlin\\s*=\\s*[\\\'" ]+)2\\.\\d+\\.\\d+'), r'\\g<1>2.2.20'),
-              (re.compile(r'(?i)(org\\.jetbrains\\.kotlin(?:\\.android)?[^\\n]*?version\\s*[\\\'" ]+)2\\.\\d+\\.\\d+'), r'\\g<1>2.2.20'),
-              (re.compile(r'(?i)(com\\.android\\.application[^\\n]*?version\\s*[\\\'" ]+)9\\.0\\.0'), r'\\g<1>8.11.1'),
+              (re.compile(r"(?i)(kotlin_version\s*=\s*['\"]+)2\.\d+\.\d+"), r"\g<1>2.2.20"),
+              (re.compile(r"(?i)(kotlin\s*=\s*['\"]+)2\.\d+\.\d+"), r"\g<1>2.2.20"),
+              (re.compile(r"(?i)(org\.jetbrains\.kotlin(?:\.android)?[^\n]*?version\s*['\"]+)2\.\d+\.\d+"), r"\g<1>2.2.20"),
+              (re.compile(r"(?i)(com\.android\.application[^\n]*?version\s*['\"]+)9\.0\.0"), r"\g<1>8.11.1"),
           ]
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}
           for path in Path('.').rglob('*'):
@@ -83,7 +83,7 @@ jobs:
                   updated = pattern.sub(replacement, updated)
               if updated != original:
                   path.write_text(updated)
-          stale = re.compile(r'2\\.(?:0\\.0|1\\.0|2\\.10)')
+          stale = re.compile(r"2\.(?:0\.0|1\.0|2\.10)")
           config_files = [p for p in Path('android').rglob('*') if p.is_file() and p.suffix in suffixes]
           matches = [(str(p), i, line) for p in config_files for i, line in enumerate(p.read_text(errors='ignore').splitlines(), 1) if stale.search(line) and 'kotlin' in line.lower()]
           if matches:
@@ -96,39 +96,39 @@ jobs:
           if [ ! -f "$WRAPPER" ]; then
             echo "::warning::Gradle wrapper properties are missing; creating a compatible distribution configuration."
             mkdir -p "$(dirname "$WRAPPER")"
-            printf '%s\\n' \\
-              'distributionBase=GRADLE_USER_HOME' \\
-              'distributionPath=wrapper/dists' \\
-              'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip' \\
-              'networkTimeout=10000' \\
-              'validateDistributionUrl=true' \\
-              'zipStoreBase=GRADLE_USER_HOME' \\
-              'zipStorePath=wrapper/dists' > "$WRAPPER"
+            cat > "$WRAPPER" <<'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+          networkTimeout=10000
+          validateDistributionUrl=true
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
           else
-            sed -i -E 's#gradle-[0-9.]+-(all|bin)\\.zip#gradle-8.14.3-\\1.zip#' "$WRAPPER"
+            sed -i -E 's#gradle-[0-9.]+-(all|bin)\.zip#gradle-8.14.3-\1.zip#' "$WRAPPER"
           fi
           if [ ! -f android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
             echo "::warning::Gradle launcher or wrapper JAR is missing; creating a bounded Gradle 8.14.3 launcher."
-            mkdir -p "$HOME/.gradle/manual"
             cat > android/gradlew <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
           GRADLE_VERSION=8.14.3
-          GRADLE_HOME="${HOME}/.gradle/manual/gradle-${GRADLE_VERSION}"
-          if [ ! -x "${GRADLE_HOME}/bin/gradle" ]; then
+          GRADLE_HOME="$HOME/.gradle/manual/gradle-$GRADLE_VERSION"
+          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
             mkdir -p "$(dirname "$GRADLE_HOME")"
             TMP_ZIP="$(mktemp)"
-            URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+            URL="https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
             if ! curl -fL --connect-timeout 20 --max-time 240 --retry 2 --retry-all-errors "$URL" -o "$TMP_ZIP"; then
               rm -f "$TMP_ZIP"
               TMP_ZIP="$(mktemp)"
-              URL="https://downloads.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+              URL="https://downloads.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
               curl -fL --connect-timeout 20 --max-time 240 --retry 2 --retry-all-errors "$URL" -o "$TMP_ZIP"
             fi
             unzip -q "$TMP_ZIP" -d "$(dirname "$GRADLE_HOME")"
             rm -f "$TMP_ZIP"
           fi
-          exec "${GRADLE_HOME}/bin/gradle" "$@"
+          exec "$GRADLE_HOME/bin/gradle" "$@"
           SH
           fi
           chmod +x android/gradlew

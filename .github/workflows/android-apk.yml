@@ -83,22 +83,29 @@ jobs:
               updated = original
               lowered = updated.lower()
 
-              # Flutter reads the Kotlin Gradle Plugin version from this plugin declaration.
-              if 'org.jetbrains.kotlin' in lowered:
-                  updated = re.sub(r'(?<!\d)2\.\d+\.\d+(?!\d)', '2.2.20', updated)
+              # Normalize every Kotlin plugin declaration and version-catalog key to Flutter's minimum.
+              def bump_kotlin(match):
+                  version = tuple(int(part) for part in match.group(2).split('.'))
+                  return f"{match.group(1)}2.2.20{match.group(3)}" if version < (2, 2, 20) else match.group(0)
 
-              # Older Flutter projects use an ext.kotlin_version property.
-              if 'kotlin_version' in lowered:
+              if 'org.jetbrains.kotlin' in lowered:
                   updated = re.sub(
-                      r'(?im)(kotlin_version\s*=\s*["\']?)2\.\d+\.\d+',
-                      r'\g<1>2.2.20',
+                      r'(?i)(org\.jetbrains\.kotlin[^\n]*?version\s*["\'])(\d+\.\d+\.\d+)(["\'])',
+                      bump_kotlin,
                       updated,
                   )
 
-              # Version-catalog aliases may be referenced indirectly from settings.gradle.
+              if 'kotlin_version' in lowered:
+                  updated = re.sub(
+                      r'(?im)(kotlin_version\s*=\s*["\']?)(\d+\.\d+\.\d+)(["\']?)',
+                      bump_kotlin,
+                      updated,
+                  )
+
+              # Also catch version-catalog aliases such as kotlin, kotlinVersion, or kotlin-android.
               updated = re.sub(
-                  r'(?im)^(\s*kotlin\s*=\s*["\'])2\.\d+\.\d+(["\'])',
-                  r'\g<1>2.2.20\2',
+                  r'(?im)^([\s\w.-]*kotlin[\w.-]*\s*=\s*["\'])(\d+\.\d+\.\d+)(["\'])',
+                  bump_kotlin,
                   updated,
               )
 
@@ -134,7 +141,8 @@ jobs:
                   continue
               lowered = text.lower()
 
-              if 'org.jetbrains.kotlin' in lowered or 'kotlin_version' in lowered:
+              if ('org.jetbrains.kotlin' in lowered or 'kotlin_version' in lowered
+                      or re.search(r'(?im)^\s*[\w.-]*kotlin[\w.-]*\s*=', text)):
                   for match in version_pattern.finditer(text):
                       version = tuple(int(part) for part in match.groups())
                       if version < (2, 2, 20):

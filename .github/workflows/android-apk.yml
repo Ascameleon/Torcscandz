@@ -324,18 +324,18 @@ jobs:
               '''
               resolution = "\n    resolutionStrategy {\n" + each_plugin + "\n    }\n"
 
-          strategy = re.search(r'(?m)^([ \\t]*)resolutionStrategy\\s*\\{', source)
+          strategy = re.search(r'(?m)^([ \t]*)resolutionStrategy\s*\{', source)
           if strategy:
               source = source[:strategy.end()] + each_plugin + source[strategy.end():]
           else:
-              plugin_management = re.search(r'(?m)^([ \\t]*)pluginManagement\\s*\\{', source)
+              plugin_management = re.search(r'(?m)^([ \t]*)pluginManagement\s*\{', source)
               if plugin_management:
                   source = source[:plugin_management.end()] + resolution + source[plugin_management.end():]
               else:
                   if kts:
-                      source = 'pluginManagement {\\n    resolutionStrategy {' + each_plugin + '\\n    }\\n}\\n' + source
+                      source = 'pluginManagement {\n    resolutionStrategy {' + each_plugin + '\n    }\n}\n' + source
                   else:
-                      source = "pluginManagement {\\n    resolutionStrategy {" + each_plugin + "\\n    }\\n    repositories { google(); mavenCentral(); gradlePluginPortal() }\\n}\\n" + source
+                      source = "pluginManagement {\n    resolutionStrategy {" + each_plugin + "\n    }\n    repositories { google(); mavenCentral(); gradlePluginPortal() }\n}\n" + source
 
           path.write_text(source)
           if "org.jetbrains.kotlin" not in source or "2.2.20" not in source:

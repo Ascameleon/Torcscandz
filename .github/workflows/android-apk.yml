@@ -79,17 +79,24 @@ jobs:
 
               changed = [False]
               for index, line in enumerate(lines):
-                  if 'kotlin' not in line.lower():
-                      continue
+                  lowered = line.lower()
+                  if 'kotlin' in lowered:
+                      def upgrade_kotlin(match):
+                          version = tuple(int(part) for part in match.groups())
+                          if version < (2, 2, 20):
+                              changed[0] = True
+                              return '2.2.20'
+                          return match.group(0)
 
-                  def upgrade(match):
-                      version = tuple(int(part) for part in match.groups())
-                      if version < (2, 2, 20):
+                      line = version_pattern.sub(upgrade_kotlin, line)
+
+                  if 'com.android' in lowered:
+                      upgraded_agp = re.sub(r'(?<!\d)9\.0\.0(?!\d)', '8.11.1', line)
+                      if upgraded_agp != line:
                           changed[0] = True
-                          return '2.2.20'
-                      return match.group(0)
+                          line = upgraded_agp
 
-                  lines[index] = version_pattern.sub(upgrade, line)
+                  lines[index] = line
 
               if changed[0]:
                   path.write_text(''.join(lines))
@@ -100,24 +107,25 @@ jobs:
               if not path.is_file() or path.suffix not in suffixes:
                   continue
               for line_no, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
-                  if 'kotlin' not in line.lower():
-                      continue
-                  for match in version_pattern.finditer(line):
-                      version = tuple(int(part) for part in match.groups())
-                      if version < (2, 2, 20):
-                          stale.append((str(path), line_no, line.strip(), match.group(0)))
+                  lowered = line.lower()
+                  if 'kotlin' in lowered:
+                      for match in version_pattern.finditer(line):
+                          version = tuple(int(part) for part in match.groups())
+                          if version < (2, 2, 20):
+                              stale.append((str(path), line_no, line.strip(), f'Kotlin {match.group(0)}'))
+                  if 'com.android' in lowered and re.search(r'(?<!\d)9\.0\.0(?!\d)', line):
+                      stale.append((str(path), line_no, line.strip(), 'Android Gradle Plugin 9.0.0'))
 
           if stale:
-              for path, line_no, line, version in stale:
-                  print(f'{path}:{line_no}: Kotlin version {version}: {line}')
-              raise SystemExit('::error::An outdated Kotlin version remains in Android Gradle configuration.')
+              for path, line_no, line, reason in stale:
+                  print(f'{path}:{line_no}: {reason}: {line}')
+              raise SystemExit('::error::An outdated Android/Kotlin plugin version remains in Gradle configuration.')
 
-          print('Kotlin plugin version floor verified: 2.2.20.')
+          print('Android Gradle Plugin floor and Kotlin plugin version floor verified.')
           if updated_files:
-              print('Updated Kotlin declarations in: ' + ', '.join(updated_files))
+              print('Normalized build declarations in: ' + ', '.join(updated_files))
           else:
-              print('No Kotlin version declaration needed upgrading.')
-          PY
+              print('No Android/Kotlin plugin declaration needed upgrading.')
           WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
           if [ ! -f "$WRAPPER" ]; then
             echo "::warning::Gradle wrapper properties are missing; creating a compatible distribution configuration."

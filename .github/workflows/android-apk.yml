@@ -161,6 +161,24 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
+      - name: Print Dart error contexts
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in \
+            'lib/screens/home_screen.dart:150:175' \
+            'lib/screens/vehicle_info_screen.dart:1:18' \
+            'lib/services/bluetooth_service.dart:1:40' \
+            'lib/services/bluetooth_service.dart:145:190'
+          do
+            file="$(printf '%s' "$spec" | cut -d: -f1)"
+            start="$(printf '%s' "$spec" | cut -d: -f2)"
+            end="$(printf '%s' "$spec" | cut -d: -f3)"
+            echo "---- $file:$start-$end ----"
+            awk -v s="$start" -v e="$end" 'NR >= s && NR <= e { printf "%5d %s\n", NR, $0 }' "$file"
+          done
+
       - name: Analyze Dart
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter analyze --no-fatal-infos --no-fatal-warnings

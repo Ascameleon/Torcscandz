@@ -62,35 +62,62 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-          patterns = [
-              (re.compile(r"(?i)(kotlin_version\s*=\s*['\"]+)2\.\d+\.\d+"), r"\g<1>2.2.20"),
-              (re.compile(r"(?i)(kotlin\s*=\s*['\"]+)2\.\d+\.\d+"), r"\g<1>2.2.20"),
-              (re.compile(r"(?i)(org\.jetbrains\.kotlin(?:\.android)?[^\n]*?version\s*['\"]+)2\.\d+\.\d+"), r"\g<1>2.2.20"),
-              (re.compile(r"(?i)(com\.android\.application[^\n]*?version\s*['\"]+)9\.0\.0"), r"\g<1>8.11.1"),
-          ]
+
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}
+          version_pattern = re.compile(r'(?<!\d)(\d+)\.(\d+)\.(\d+)(?!\d)')
+          updated_files = []
+
           for path in Path('.').rglob('*'):
               if not path.is_file() or path.suffix not in suffixes:
                   continue
               if '.git' in path.parts or 'build' in path.parts:
                   continue
               try:
-                  original = path.read_text()
+                  lines = path.read_text().splitlines(keepends=True)
               except (UnicodeDecodeError, OSError):
                   continue
-              updated = original
-              for pattern, replacement in patterns:
-                  updated = pattern.sub(replacement, updated)
-              if updated != original:
-                  path.write_text(updated)
-          stale = re.compile(r"2\.(?:0\.0|1\.0|2\.10)")
-          config_files = [p for p in Path('android').rglob('*') if p.is_file() and p.suffix in suffixes]
-          matches = [(str(p), i, line) for p in config_files for i, line in enumerate(p.read_text(errors='ignore').splitlines(), 1) if stale.search(line) and 'kotlin' in line.lower()]
-          if matches:
-              for path, line_no, line in matches:
-                  print(f'{path}:{line_no}: {line}')
+
+              changed = False
+              for index, line in enumerate(lines):
+                  if 'kotlin' not in line.lower():
+                      continue
+
+                  def upgrade(match):
+                      nonlocal changed
+                      version = tuple(int(part) for part in match.groups())
+                      if version < (2, 2, 20):
+                          changed = True
+                          return '2.2.20'
+                      return match.group(0)
+
+                  lines[index] = version_pattern.sub(upgrade, line)
+
+              if changed:
+                  path.write_text(''.join(lines))
+                  updated_files.append(str(path))
+
+          stale = []
+          for path in Path('android').rglob('*'):
+              if not path.is_file() or path.suffix not in suffixes:
+                  continue
+              for line_no, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
+                  if 'kotlin' not in line.lower():
+                      continue
+                  for match in version_pattern.finditer(line):
+                      version = tuple(int(part) for part in match.groups())
+                      if version < (2, 2, 20):
+                          stale.append((str(path), line_no, line.strip(), match.group(0)))
+
+          if stale:
+              for path, line_no, line, version in stale:
+                  print(f'{path}:{line_no}: Kotlin version {version}: {line}')
               raise SystemExit('::error::An outdated Kotlin version remains in Android Gradle configuration.')
-          print('Kotlin plugin declarations normalized to 2.2.20 where declared.')
+
+          print('Kotlin plugin version floor verified: 2.2.20.')
+          if updated_files:
+              print('Updated Kotlin declarations in: ' + ', '.join(updated_files))
+          else:
+              print('No Kotlin version declaration needed upgrading.')
           PY
           WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
           if [ ! -f "$WRAPPER" ]; then

@@ -74,7 +74,7 @@ jobs:
           root = Path('android')
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}
           kotlin_plugin = re.compile(r"""(org\.jetbrains\.kotlin[^\n]*?version\s*['"])(\d+\.\d+\.\d+)(['"])""", re.I)
-          kotlin_property = re.compile(r"""(?im)(kotlin_version\s*=\s*['"]?)(\d+\.\d+\.\d+)(['"]?)""")
+          kotlin_property = re.compile(r"""(?im)(kotlin[_\.-]?version\s*=\s*['"]?)(\d+\.\d+\.\d+)(['"]?)""")
           kotlin_catalog = re.compile(r"""(?im)^(\s*kotlin[\w.-]*\s*=\s*['"])(\d+\.\d+\.\d+)(['"])""")
           agp_plugin = re.compile(r"""(com\.android\.application[^\n]*?version\s*['"]|com\.android\.tools\.build:gradle:)(\d+\.\d+\.\d+)""", re.I)
           agp_catalog = re.compile(r"""(?im)^(\s*(?:agp|androidGradlePlugin|android_gradle_plugin)\s*=\s*['"])(\d+\.\d+\.\d+)(['"])""")
@@ -110,7 +110,7 @@ jobs:
 
           print('Updated Gradle declarations:', ', '.join(changed) if changed else 'none')
           for path in sorted(root.rglob('*')):
-              if path.is_file() and path.name in {'settings.gradle', 'settings.gradle.kts', 'build.gradle', 'build.gradle.kts', 'libs.versions.toml'}:
+              if path.is_file() and path.suffix in suffixes:
                   for number, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
                       if any(token in line.lower() for token in ('kotlin', 'com.android', 'agp =')):
                           print(f'{path}:{number}: {line.strip()}')

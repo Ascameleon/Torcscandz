@@ -65,6 +65,7 @@ jobs:
 
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}
           version_pattern = re.compile(r'(?<!\d)(\d+)\.(\d+)\.(\d+)(?!\d)')
+          agp_key = re.compile(r'(?i)^\s*(?:agp|android[_-]?gradle[_-]?plugin)\s*=')
           updated_files = []
 
           for path in Path('.').rglob('*'):
@@ -90,7 +91,7 @@ jobs:
 
                       line = version_pattern.sub(upgrade_kotlin, line)
 
-                  if 'com.android' in lowered:
+                  if 'com.android' in lowered or agp_key.match(line):
                       upgraded_agp = re.sub(r'(?<!\d)9\.0\.0(?!\d)', '8.11.1', line)
                       if upgraded_agp != line:
                           changed[0] = True
@@ -113,7 +114,7 @@ jobs:
                           version = tuple(int(part) for part in match.groups())
                           if version < (2, 2, 20):
                               stale.append((str(path), line_no, line.strip(), f'Kotlin {match.group(0)}'))
-                  if 'com.android' in lowered and re.search(r'(?<!\d)9\.0\.0(?!\d)', line):
+                  if ('com.android' in lowered or agp_key.match(line)) and re.search(r'(?<!\d)9\.0\.0(?!\d)', line):
                       stale.append((str(path), line_no, line.strip(), 'Android Gradle Plugin 9.0.0'))
 
           if stale:

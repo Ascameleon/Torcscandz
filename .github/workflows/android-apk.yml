@@ -86,7 +86,7 @@ jobs:
               # Normalize every Kotlin plugin declaration and version-catalog key to Flutter's minimum.
               def bump_kotlin(match):
                   version = tuple(int(part) for part in match.group(2).split('.'))
-                  return f"{match.group(1)}2.2.20{match.group(3)}" if version < (2, 2, 20) else match.group(0)
+                  return f"{match.group(1)}2.2.20{match.group(3) or ''}" if version < (2, 2, 20) else match.group(0)
 
               if 'org.jetbrains.kotlin' in lowered:
                   updated = re.sub(

@@ -65,68 +65,96 @@ jobs:
 
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}
           version_pattern = re.compile(r'(?<!\d)(\d+)\.(\d+)\.(\d+)(?!\d)')
-          agp_key = re.compile(r'(?i)^\s*(?:agp|android[_-]?gradle[_-]?plugin)\s*=')
-          updated_files = []
+          agp_key = re.compile(r'(?im)^\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=')
+          search_roots = (Path('.'), Path('..'))
+          paths = set()
+          for root in search_roots:
+              paths.update(path for path in root.rglob('*') if path.is_file() and path.suffix in suffixes)
 
-          for path in Path('.').rglob('*'):
-              if not path.is_file() or path.suffix not in suffixes:
-                  continue
-              if '.git' in path.parts or 'build' in path.parts:
+          updated_files = []
+          for path in sorted(paths):
+              if any(part in {'.git', 'build', '.dart_tool'} for part in path.parts):
                   continue
               try:
-                  lines = path.read_text().splitlines(keepends=True)
+                  original = path.read_text()
               except (UnicodeDecodeError, OSError):
                   continue
 
-              changed = [False]
-              for index, line in enumerate(lines):
-                  lowered = line.lower()
-                  if 'kotlin' in lowered:
-                      def upgrade_kotlin(match):
-                          version = tuple(int(part) for part in match.groups())
-                          if version < (2, 2, 20):
-                              changed[0] = True
-                              return '2.2.20'
-                          return match.group(0)
+              updated = original
+              lowered = updated.lower()
 
-                      line = version_pattern.sub(upgrade_kotlin, line)
+              # Flutter reads the Kotlin Gradle Plugin version from this plugin declaration.
+              if 'org.jetbrains.kotlin' in lowered:
+                  updated = re.sub(r'(?<!\d)2\.\d+\.\d+(?!\d)', '2.2.20', updated)
 
-                  if 'com.android' in lowered or agp_key.match(line):
-                      upgraded_agp = re.sub(r'(?<!\d)9\.0\.0(?!\d)', '8.11.1', line)
-                      if upgraded_agp != line:
-                          changed[0] = True
-                          line = upgraded_agp
+              # Older Flutter projects use an ext.kotlin_version property.
+              if 'kotlin_version' in lowered:
+                  updated = re.sub(
+                      r'(?im)(kotlin_version\s*=\s*["\']?)2\.\d+\.\d+',
+                      r'\g<1>2.2.20',
+                      updated,
+                  )
 
-                  lines[index] = line
+              # Version-catalog aliases may be referenced indirectly from settings.gradle.
+              updated = re.sub(
+                  r'(?im)^(\s*kotlin\s*=\s*["\'])2\.\d+\.\d+(["\'])',
+                  r'\g<1>2.2.20\2',
+                  updated,
+              )
 
-              if changed[0]:
-                  path.write_text(''.join(lines))
+              # Keep AGP 8.11.1 paired with the Gradle 8.14.3 distribution.
+              if 'com.android' in lowered:
+                  updated = re.sub(
+                      r'(?i)(com\.android\.application[^\n]*?version\s*["\']|com\.android\.tools\.build:gradle:)(9\.0\.0)',
+                      r'\g<1>8.11.1',
+                      updated,
+                  )
+              if agp_key.search(updated):
+                  updated = re.sub(
+                      r'(?im)^(\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=\s*["\'])9\.0\.0(["\'])',
+                      r'\g<1>8.11.1\2',
+                      updated,
+                  )
+
+              if updated != original:
+                  path.write_text(updated)
                   updated_files.append(str(path))
 
           stale = []
-          for path in Path('android').rglob('*'):
-              if not path.is_file() or path.suffix not in suffixes:
+          for path in sorted(paths):
+              if any(part in {'.git', 'build', '.dart_tool'} for part in path.parts):
                   continue
-              for line_no, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
-                  lowered = line.lower()
-                  if 'kotlin' in lowered:
-                      for match in version_pattern.finditer(line):
-                          version = tuple(int(part) for part in match.groups())
-                          if version < (2, 2, 20):
-                              stale.append((str(path), line_no, line.strip(), f'Kotlin {match.group(0)}'))
-                  if ('com.android' in lowered or agp_key.match(line)) and re.search(r'(?<!\d)9\.0\.0(?!\d)', line):
-                      stale.append((str(path), line_no, line.strip(), 'Android Gradle Plugin 9.0.0'))
+              try:
+                  text = path.read_text(errors='ignore')
+              except OSError:
+                  continue
+              lowered = text.lower()
+
+              if 'org.jetbrains.kotlin' in lowered or 'kotlin_version' in lowered:
+                  for match in version_pattern.finditer(text):
+                      version = tuple(int(part) for part in match.groups())
+                      if version < (2, 2, 20):
+                          stale.append((str(path), 'Kotlin', match.group(0)))
+
+              if ('com.android' in lowered or agp_key.search(text)) and re.search(r'(?<!\d)9\.0\.0(?!\d)', text):
+                  stale.append((str(path), 'Android Gradle Plugin', '9.0.0'))
 
           if stale:
-              for path, line_no, line, reason in stale:
-                  print(f'{path}:{line_no}: {reason}: {line}')
+              for path, kind, version in stale:
+                  print(f'{path}: outdated {kind} version {version}')
               raise SystemExit('::error::An outdated Android/Kotlin plugin version remains in Gradle configuration.')
 
-          print('Android Gradle Plugin floor and Kotlin plugin version floor verified.')
+          print('Android Gradle Plugin and Kotlin plugin version floors verified.')
           if updated_files:
               print('Normalized build declarations in: ' + ', '.join(updated_files))
           else:
               print('No Android/Kotlin plugin declaration needed upgrading.')
+
+          for path in sorted(paths):
+              if path.name in {'settings.gradle', 'settings.gradle.kts', 'build.gradle', 'build.gradle.kts', 'libs.versions.toml'}:
+                  for line_no, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
+                      if any(token in line.lower() for token in ('kotlin', 'com.android', 'agp =')):
+                          print(f'{path}:{line_no}: {line.strip()}')
           PY
           WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
           if [ ! -f "$WRAPPER" ]; then

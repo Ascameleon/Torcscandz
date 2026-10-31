@@ -73,11 +73,11 @@ jobs:
 
           root = Path('android')
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}
-          kotlin_plugin = re.compile(r"(org\.jetbrains\.kotlin[^\n]*?version\s*['"])(\d+\.\d+\.\d+)(['"])", re.I)
-          kotlin_property = re.compile(r"(?im)(kotlin_version\s*=\s*['"]?)(\d+\.\d+\.\d+)(['"]?)")
-          kotlin_catalog = re.compile(r"(?im)^(\s*kotlin[\w.-]*\s*=\s*['"])(\d+\.\d+\.\d+)(['"])")
-          agp_plugin = re.compile(r"(com\.android\.application[^\n]*?version\s*['"]|com\.android\.tools\.build:gradle:)(\d+\.\d+\.\d+)", re.I)
-          agp_catalog = re.compile(r"(?im)^(\s*(?:agp|androidGradlePlugin|android_gradle_plugin)\s*=\s*['"])(\d+\.\d+\.\d+)(['"])")
+          kotlin_plugin = re.compile(r"""(org\.jetbrains\.kotlin[^\n]*?version\s*['"])(\d+\.\d+\.\d+)(['"])""", re.I)
+          kotlin_property = re.compile(r"""(?im)(kotlin_version\s*=\s*['"]?)(\d+\.\d+\.\d+)(['"]?)""")
+          kotlin_catalog = re.compile(r"""(?im)^(\s*kotlin[\w.-]*\s*=\s*['"])(\d+\.\d+\.\d+)(['"])""")
+          agp_plugin = re.compile(r"""(com\.android\.application[^\n]*?version\s*['"]|com\.android\.tools\.build:gradle:)(\d+\.\d+\.\d+)""", re.I)
+          agp_catalog = re.compile(r"""(?im)^(\s*(?:agp|androidGradlePlugin|android_gradle_plugin)\s*=\s*['"])(\d+\.\d+\.\d+)(['"])""")
 
           def bump_kotlin(match):
               version = tuple(int(part) for part in match.group(2).split('.'))

@@ -102,17 +102,21 @@ jobs:
                   updated,
               )
 
-              # Keep AGP 8.11.1 paired with the Gradle 8.14.3 distribution.
+              # Pin any AGP 9+ declaration to 8.11.1, paired with Gradle 8.14.3.
+              def pin_agp(match):
+                  version = match.group(2)
+                  return f"{match.group(1)}8.11.1" if int(version.split(".")[0]) >= 9 else match.group(0)
+
               if 'com.android' in lowered:
                   updated = re.sub(
-                      r'(?i)(com\.android\.application[^\n]*?version\s*["\']|com\.android\.tools\.build:gradle:)(9\.0\.0)',
-                      r'\g<1>8.11.1',
+                      r'(?i)(com\.android\.application[^\n]*?version\s*["\']|com\.android\.tools\.build:gradle:)(\d+\.\d+\.\d+)',
+                      pin_agp,
                       updated,
                   )
               if agp_key.search(updated):
                   updated = re.sub(
-                      r'(?im)^(\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=\s*["\'])9\.0\.0(["\'])',
-                      r'\g<1>8.11.1\2',
+                      r'(?im)^(\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=\s*["\'])(\d+\.\d+\.\d+)(["\'])',
+                      lambda match: f"{match.group(1)}8.11.1{match.group(3)}" if int(match.group(2).split(".")[0]) >= 9 else match.group(0),
                       updated,
                   )
 
@@ -136,8 +140,14 @@ jobs:
                       if version < (2, 2, 20):
                           stale.append((str(path), 'Kotlin', match.group(0)))
 
-              if ('com.android' in lowered or agp_key.search(text)) and re.search(r'(?<!\d)9\.0\.0(?!\d)', text):
-                  stale.append((str(path), 'Android Gradle Plugin', '9.0.0'))
+              if 'com.android' in lowered or agp_key.search(text):
+                  agp_versions = re.findall(
+                      r'(?im)(?:com\.android\.application[^\n]*?version\s*["\']|com\.android\.tools\.build:gradle:|(?:^\s*(?:agp|android[_-]?gradle[_-]?plugin(?:[_-]?version)?)\s*=\s*["\']))(\d+\.\d+\.\d+)',
+                      text,
+                  )
+                  for agp_version in agp_versions:
+                      if int(agp_version.split('.')[0]) >= 9:
+                          stale.append((str(path), 'Android Gradle Plugin', agp_version))
 
           if stale:
               for path, kind, version in stale:

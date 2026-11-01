@@ -70,6 +70,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+          import xml.etree.ElementTree as ET
 
           root = Path('android')
           suffixes = {'.gradle', '.kts', '.toml', '.properties'}

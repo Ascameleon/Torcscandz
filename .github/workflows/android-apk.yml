@@ -1,6 +1,12 @@
 name: Android APK Build
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'DzTorqscan_v1.4.0_complete.zip'
+      - 'DzTorqscan_source_recovery_*.zip'
+      - '.github/workflows/android-apk.yml'
   push:
     branches: [main]
     paths:

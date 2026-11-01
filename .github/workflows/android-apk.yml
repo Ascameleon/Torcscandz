@@ -262,14 +262,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '^name: torqscan        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
-            flutter test
-          else
-            echo '::warning::No Dart test files found; hardware validation remains required.'
-          fi
+          grep -q '^name: torqscan$' "$PROJECT_DIR/pubspec.yaml"
+          test -f "$PROJECT_DIR/lib/services/obd_protocol.dart"
+          test -f "$PROJECT_DIR/lib/services/connection_endpoint.dart"
+          mkdir -p "$PROJECT_DIR/test"
+          install -m 0644 "$GITHUB_WORKSPACE/ci/torqscan_tests/obd_protocol_test.dart" "$PROJECT_DIR/test/obd_protocol_test.dart"
+          install -m 0644 "$GITHUB_WORKSPACE/ci/torqscan_tests/connection_endpoint_test.dart" "$PROJECT_DIR/test/connection_endpoint_test.dart"
+          test "$(find "$PROJECT_DIR/test" -maxdepth 1 -type f -name '*_test.dart' | wc -l)" -ge 2
+
+      - name: Run Dart tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter test --reporter expanded
 
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}

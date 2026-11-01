@@ -258,6 +258,78 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
+      - name: Install deterministic Dart unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^name: torqscan        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
+            flutter test
+          else
+            echo '::warning::No Dart test files found; hardware validation remains required.'
+          fi
+
+      - name: Build release APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter build apk --release --no-pub --verbose
+
+      - name: Sign APK for direct device testing
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='build/app/outputs/flutter-apk/app-release.apk'
+          test -s "$apk"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "$sdk_root" || ! -d "$sdk_root/build-tools" ]]; then
+            echo "::error::Android SDK build-tools directory was not found."
+            exit 1
+          fi
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          if [[ -z "$apksigner" ]]; then
+            echo "::error::apksigner was not found in the installed Android build-tools."
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/torqscan-test.keystore"
+          password="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt -keystore "$keystore" -storepass "$password" -alias torqscan-test -keypass "$password" -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=TorqScan Test,O=Ascameleon,C=US"
+          "$apksigner" sign --ks "$keystore" --ks-key-alias torqscan-test --ks-pass "pass:$password" --key-pass "pass:$password" --out "$apk.signed" "$apk"
+          mv "$apk.signed" "$apk"
+          "$apksigner" verify --verbose --print-certs "$apk"
+          rm -f "$keystore"
+
+      - name: Verify APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='build/app/outputs/flutter-apk/app-release.apk'
+          test -s "$apk"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          "$apksigner" verify --verbose "$apk"
+          unzip -t "$apk" >/dev/null
+          sha256sum "$apk"
+          ls -lh "$apk"
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: torqscan-dz-android-apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+ "$PROJECT_DIR/pubspec.yaml"
+          test -f "$PROJECT_DIR/lib/services/obd_protocol.dart"
+          test -f "$PROJECT_DIR/lib/services/connection_endpoint.dart"
+          mkdir -p "$PROJECT_DIR/test"
+          install -m 0644 "$GITHUB_WORKSPACE/ci/torqscan_tests/obd_protocol_test.dart" "$PROJECT_DIR/test/obd_protocol_test.dart"
+          install -m 0644 "$GITHUB_WORKSPACE/ci/torqscan_tests/connection_endpoint_test.dart" "$PROJECT_DIR/test/connection_endpoint_test.dart"
+          find "$PROJECT_DIR/test" -maxdepth 1 -type f -name '*_test.dart' -print
+
       - name: Run Dart tests
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash

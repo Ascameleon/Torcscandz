@@ -1,0 +1,91 @@
+name: TorqScan PR validation
+
+on:
+  push:
+    branches:
+      - ci/torqscan-unit-tests-20261101
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android-apk.yml"
+      - ".github/workflows/torqscan-pr-validation.yml"
+      - "ci/torqscan_tests/**"
+      - "ci/patch_torqscan.py"
+      - "DzTorqscan_v1.4.0_complete.zip"
+      - "DzTorqscan_source_recovery_*.zip"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: torqscan-pr-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test the actual v1.4.0 source archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Extract the same source archive used by the release build
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive='DzTorqscan_v1.4.0_complete.zip'
+          if [ ! -f "$archive" ]; then
+            archive="$(find . -maxdepth 1 -type f -name 'DzTorqscan_source_recovery_*.zip' -print | sort -V | tail -n 1)"
+          fi
+          test -n "$archive"
+          test -f "$archive"
+          mkdir -p extracted
+          unzip -q "$archive" -d extracted
+          pubspec="$(find extracted -type f -name pubspec.yaml -not -path '*/.dart_tool/*' -print -quit)"
+          test -n "$pubspec"
+          project_dir="$(dirname "$pubspec")"
+          echo "PROJECT_DIR=$project_dir" >> "$GITHUB_ENV"
+          echo "Using source archive: $archive"
+          echo "Using Flutter project: $project_dir"
+          grep -n '^name:' "$pubspec"
+
+      - name: Install Flutter dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter pub get
+
+      - name: Apply audited Dart source fixes
+        run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+
+      - name: Install retained regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^name: torqscan$' "$PROJECT_DIR/pubspec.yaml"
+          test -f "$PROJECT_DIR/lib/services/obd_protocol.dart"
+          test -f "$PROJECT_DIR/lib/services/connection_endpoint.dart"
+          mkdir -p "$PROJECT_DIR/test"
+          install -m 0644 "$GITHUB_WORKSPACE/ci/torqscan_tests/obd_protocol_test.dart" "$PROJECT_DIR/test/obd_protocol_test.dart"
+          install -m 0644 "$GITHUB_WORKSPACE/ci/torqscan_tests/connection_endpoint_test.dart" "$PROJECT_DIR/test/connection_endpoint_test.dart"
+          test "$(find "$PROJECT_DIR/test" -maxdepth 1 -type f -name '*_test.dart' | wc -l)" -ge 2
+
+      - name: Analyze Dart
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run Dart regression tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter test --reporter expanded

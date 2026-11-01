@@ -159,6 +159,38 @@ jobs:
               properties_text += '\nandroid.newDsl=false\n'
           gradle_properties.write_text(properties_text)
 
+          # Resolve the verified app-vs-plugin android:theme manifest conflict.
+          manifest_file = root / 'app' / 'src' / 'main' / 'AndroidManifest.xml'
+          if not manifest_file.is_file():
+              raise RuntimeError('Android app/src/main/AndroidManifest.xml is missing.')
+          manifest_text = manifest_file.read_text()
+          manifest_open = re.search(r'<manifest\b[^>]*>', manifest_text, re.S)
+          if manifest_open is None:
+              raise RuntimeError('Android manifest root element is missing.')
+          manifest_tag = manifest_open.group(0)
+          if not re.search(r'\bxmlns:tools\s*=', manifest_tag):
+              updated_manifest_tag = manifest_tag[:-1] + ' xmlns:tools="http://schemas.android.com/tools">'
+              manifest_text = manifest_text[:manifest_open.start()] + updated_manifest_tag + manifest_text[manifest_open.end():]
+          app_match = re.search(r'<application\b[^>]*>', manifest_text, re.S)
+          if app_match is None:
+              raise RuntimeError('Android application element is missing.')
+          app_tag = app_match.group(0)
+          if not re.search(r'\bandroid:theme\s*=', app_tag):
+              raise RuntimeError('Expected LaunchTheme android:theme declaration was not found.')
+          replace_match = re.search(r"""\btools:replace\s*=\s*["']([^"']*)["']""", app_tag)
+          if replace_match:
+              replace_values = [value.strip() for value in replace_match.group(1).split(',') if value.strip()]
+              if 'android:theme' not in replace_values:
+                  replace_values.append('android:theme')
+              replacement = 'tools:replace="' + ','.join(replace_values) + '"'
+              app_tag = app_tag[:replace_match.start()] + replacement + app_tag[replace_match.end():]
+          else:
+              app_tag = app_tag[:-1] + ' tools:replace="android:theme">'
+          manifest_text = manifest_text[:app_match.start()] + app_tag + manifest_text[app_match.end():]
+          manifest_file.write_text(manifest_text)
+          ET.parse(manifest_file)
+          print('Applied manifest merge override: tools:replace="android:theme"')
+
           settings_text = settings_file.read_text()
           app_text = app_build_file.read_text()
           if 'org.jetbrains.kotlin.android' not in settings_text or 'version "2.2.20"' not in settings_text:

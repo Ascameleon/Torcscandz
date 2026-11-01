@@ -273,12 +273,42 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter build apk --release --no-pub --verbose
 
-      - name: Verify APK
+      - name: Sign APK for direct device testing
         working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
         run: |
           set -euo pipefail
           apk='build/app/outputs/flutter-apk/app-release.apk'
           test -s "$apk"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "$sdk_root" || ! -d "$sdk_root/build-tools" ]]; then
+            echo "::error::Android SDK build-tools directory was not found."
+            exit 1
+          fi
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          if [[ -z "$apksigner" ]]; then
+            echo "::error::apksigner was not found in the installed Android build-tools."
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/torqscan-test.keystore"
+          password="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt -keystore "$keystore" -storepass "$password" -alias torqscan-test -keypass "$password" -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=TorqScan Test,O=Ascameleon,C=US"
+          "$apksigner" sign --ks "$keystore" --ks-key-alias torqscan-test --ks-pass "pass:$password" --key-pass "pass:$password" --out "$apk.signed" "$apk"
+          mv "$apk.signed" "$apk"
+          "$apksigner" verify --verbose --print-certs "$apk"
+          rm -f "$keystore"
+
+      - name: Verify APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='build/app/outputs/flutter-apk/app-release.apk'
+          test -s "$apk"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          "$apksigner" verify --verbose "$apk"
+          unzip -t "$apk" >/dev/null
           sha256sum "$apk"
           ls -lh "$apk"
 

@@ -31,6 +31,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Validate Android release workflow YAML
+        run: ruby -e 'require "yaml"; YAML.load_file(".github/workflows/android-apk.yml")'
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:

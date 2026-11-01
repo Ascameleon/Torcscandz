@@ -76,6 +76,7 @@ jobs:
           kotlin_plugin = re.compile(r"""(org\.jetbrains\.kotlin[^\n]*?version\s*['"])(\d+\.\d+\.\d+)(['"])""", re.I)
           kotlin_property = re.compile(r"""(?im)(kotlin[_\.-]?version\s*=\s*['"]?)(\d+\.\d+\.\d+)(['"]?)""")
           kotlin_catalog = re.compile(r"""(?im)^(\s*kotlin[\w.-]*\s*=\s*['"])(\d+\.\d+\.\d+)(['"])""")
+          kotlin_classpath = re.compile(r"""(org\.jetbrains\.kotlin:kotlin-gradle-plugin:)(\d+\.\d+\.\d+)""", re.I)
           agp_plugin = re.compile(r"""(com\.android\.application[^\n]*?version\s*['"]|com\.android\.tools\.build:gradle:)(\d+\.\d+\.\d+)""", re.I)
           agp_catalog = re.compile(r"""(?im)^(\s*(?:agp|androidGradlePlugin|android_gradle_plugin)\s*=\s*['"])(\d+\.\d+\.\d+)(['"])""")
 
@@ -98,6 +99,7 @@ jobs:
               updated = kotlin_plugin.sub(bump_kotlin, original)
               updated = kotlin_property.sub(bump_kotlin, updated)
               updated = kotlin_catalog.sub(bump_kotlin, updated)
+              updated = kotlin_classpath.sub(lambda m: f"{m.group(1)}2.2.20", updated)
               updated = agp_plugin.sub(pin_agp, updated)
               updated = agp_catalog.sub(
                   lambda m: f"{m.group(1)}8.11.1{m.group(3)}"
@@ -143,124 +145,19 @@ jobs:
               changed.append(str(app_build_file))
 
           gradle_properties = root / 'gradle.properties'
-          if gradle_properties.exists():
-              properties_text = gradle_properties.read_text()
-              properties_text = re.sub(
-                  r'(?im)^\s*android\.builtInKotlin\s*=\s*true\s*          for path in sorted(root.rglob('*')):
-              if path.is_file() and path.suffix in suffixes:
-                  for number, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
-                      if any(token in line.lower() for token in ('kotlin', 'com.android', 'agp =')):
-                          print(f'{path}:{number}: {line.strip()}')
-          PY
-          wrapper='android/gradle/wrapper/gradle-wrapper.properties'
-          mkdir -p android/gradle/wrapper
-          if [ -f "$wrapper" ]; then
-            sed -i -E 's#gradle-[0-9.]+-(all|bin)\.zip#gradle-8.14.3-\1.zip#' "$wrapper"
-          else
-            cat > "$wrapper" <<'PROPERTIES'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.3-bin.zip
-          networkTimeout=10000
-          validateDistributionUrl=true
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          PROPERTIES
-          fi
-          touch android/gradle.properties
-          grep -q '^android.newDsl=false$' android/gradle.properties || printf '\nandroid.newDsl=false\n' >> android/gradle.properties
-          if [ ! -x android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
-            cat > android/gradlew <<'SH'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          GRADLE_VERSION=8.14.3
-          GRADLE_HOME="$HOME/.gradle/manual/gradle-$GRADLE_VERSION"
-          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
-            mkdir -p "$(dirname "$GRADLE_HOME")"
-            TMP_ZIP="$(mktemp)"
-            URL="https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
-            if ! curl -fL --connect-timeout 20 --max-time 240 --retry 2 --retry-all-errors "$URL" -o "$TMP_ZIP"; then
-              rm -f "$TMP_ZIP"
-              TMP_ZIP="$(mktemp)"
-              URL="https://downloads.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
-              curl -fL --connect-timeout 20 --max-time 240 --retry 2 --retry-all-errors "$URL" -o "$TMP_ZIP"
-            fi
-            unzip -q "$TMP_ZIP" -d "$(dirname "$GRADLE_HOME")"
-            rm -f "$TMP_ZIP"
-          fi
-          exec "$GRADLE_HOME/bin/gradle" "$@"
-          SH
-          fi
-          chmod +x android/gradlew
-          cat "$wrapper"
-
-      - name: Install Flutter dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter pub get
-
-      - name: Print Dart error contexts
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for spec in \
-            'lib/screens/home_screen.dart:150:175' \
-            'lib/screens/vehicle_info_screen.dart:1:18' \
-            'lib/services/bluetooth_service.dart:1:260' \
-            'lib/services/obd_service.dart:1:260' \
-            'lib/services/bluetooth_service.dart:145:190'
-          do
-            file="$(printf '%s' "$spec" | cut -d: -f1)"
-            start="$(printf '%s' "$spec" | cut -d: -f2)"
-            end="$(printf '%s' "$spec" | cut -d: -f3)"
-            echo "---- $file:$start-$end ----"
-            awk -v s="$start" -v e="$end" 'NR >= s && NR <= e { printf "%5d %s\n", NR, $0 }' "$file"
-          done
-
-      - name: Apply audited Dart source fixes
-        run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
-
-      - name: Analyze Dart
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
-
-      - name: Run Dart tests
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
-            flutter test
-          else
-            echo '::warning::No Dart test files found; hardware validation remains required.'
-          fi
-
-      - name: Build release APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release --no-pub --verbose
-
-      - name: Verify APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          set -euo pipefail
-          apk='build/app/outputs/flutter-apk/app-release.apk'
-          test -s "$apk"
-          sha256sum "$apk"
-          ls -lh "$apk"
-
-      - name: Upload APK artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: torqscan-dz-android-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-          retention-days: 14
-,
-                  'android.builtInKotlin=false',
-                  properties_text,
-              )
-              gradle_properties.write_text(properties_text)
+          if not gradle_properties.exists():
+              gradle_properties.write_text('')
+          properties_text = gradle_properties.read_text()
+          properties_text = re.sub(
+              r'(?im)^\s*android\.builtInKotlin\s*=\s*true\s*$',
+              'android.builtInKotlin=false',
+              properties_text,
+          )
+          if 'android.builtInKotlin=' not in properties_text:
+              properties_text += '\nandroid.builtInKotlin=false\n'
+          if 'android.newDsl=false' not in properties_text:
+              properties_text += '\nandroid.newDsl=false\n'
+          gradle_properties.write_text(properties_text)
 
           settings_text = settings_file.read_text()
           app_text = app_build_file.read_text()
@@ -320,25 +217,6 @@ jobs:
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
-
-      - name: Print Dart error contexts
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for spec in \
-            'lib/screens/home_screen.dart:150:175' \
-            'lib/screens/vehicle_info_screen.dart:1:18' \
-            'lib/services/bluetooth_service.dart:1:260' \
-            'lib/services/obd_service.dart:1:260' \
-            'lib/services/bluetooth_service.dart:145:190'
-          do
-            file="$(printf '%s' "$spec" | cut -d: -f1)"
-            start="$(printf '%s' "$spec" | cut -d: -f2)"
-            end="$(printf '%s' "$spec" | cut -d: -f3)"
-            echo "---- $file:$start-$end ----"
-            awk -v s="$start" -v e="$end" 'NR >= s && NR <= e { printf "%5d %s\n", NR, $0 }' "$file"
-          done
 
       - name: Apply audited Dart source fixes
         run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"

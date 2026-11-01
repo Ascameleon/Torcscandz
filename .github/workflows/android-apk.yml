@@ -108,6 +108,166 @@ jobs:
                   path.write_text(updated)
                   changed.append(str(path))
 
+          settings_file = root / 'settings.gradle'
+          if not settings_file.exists():
+              raise RuntimeError('Android settings.gradle is missing.')
+          settings_text = settings_file.read_text()
+          if 'org.jetbrains.kotlin.android' not in settings_text:
+              settings_lines = settings_text.splitlines()
+              marker_index = next(
+                  (i for i, line in enumerate(settings_lines) if 'com.android.application' in line and 'version' in line),
+                  None,
+              )
+              if marker_index is None:
+                  raise RuntimeError('Cannot add Kotlin plugin: Android application plugin declaration not found.')
+              settings_lines.insert(marker_index + 1, '    id "org.jetbrains.kotlin.android" version "2.2.20" apply false')
+              settings_text = '\n'.join(settings_lines) + '\n'
+              settings_file.write_text(settings_text)
+              changed.append(str(settings_file))
+
+          app_build_file = root / 'app' / 'build.gradle'
+          if not app_build_file.exists():
+              raise RuntimeError('Android app/build.gradle is missing.')
+          app_text = app_build_file.read_text()
+          if 'org.jetbrains.kotlin.android' not in app_text:
+              app_lines = app_text.splitlines()
+              app_marker = next(
+                  (i for i, line in enumerate(app_lines) if 'com.android.application' in line),
+                  None,
+              )
+              if app_marker is None:
+                  raise RuntimeError('Cannot add Kotlin plugin to app module: Android application plugin declaration not found.')
+              app_lines.insert(app_marker + 1, '    id "org.jetbrains.kotlin.android"')
+              app_text = '\n'.join(app_lines) + '\n'
+              app_build_file.write_text(app_text)
+              changed.append(str(app_build_file))
+
+          gradle_properties = root / 'gradle.properties'
+          if gradle_properties.exists():
+              properties_text = gradle_properties.read_text()
+              properties_text = re.sub(
+                  r'(?im)^\s*android\.builtInKotlin\s*=\s*true\s*          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.suffix in suffixes:
+                  for number, line in enumerate(path.read_text(errors='ignore').splitlines(), 1):
+                      if any(token in line.lower() for token in ('kotlin', 'com.android', 'agp =')):
+                          print(f'{path}:{number}: {line.strip()}')
+          PY
+          wrapper='android/gradle/wrapper/gradle-wrapper.properties'
+          mkdir -p android/gradle/wrapper
+          if [ -f "$wrapper" ]; then
+            sed -i -E 's#gradle-[0-9.]+-(all|bin)\.zip#gradle-8.14.3-\1.zip#' "$wrapper"
+          else
+            cat > "$wrapper" <<'PROPERTIES'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+          networkTimeout=10000
+          validateDistributionUrl=true
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          PROPERTIES
+          fi
+          touch android/gradle.properties
+          grep -q '^android.newDsl=false$' android/gradle.properties || printf '\nandroid.newDsl=false\n' >> android/gradle.properties
+          if [ ! -x android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.jar ]; then
+            cat > android/gradlew <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          GRADLE_VERSION=8.14.3
+          GRADLE_HOME="$HOME/.gradle/manual/gradle-$GRADLE_VERSION"
+          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
+            mkdir -p "$(dirname "$GRADLE_HOME")"
+            TMP_ZIP="$(mktemp)"
+            URL="https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
+            if ! curl -fL --connect-timeout 20 --max-time 240 --retry 2 --retry-all-errors "$URL" -o "$TMP_ZIP"; then
+              rm -f "$TMP_ZIP"
+              TMP_ZIP="$(mktemp)"
+              URL="https://downloads.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
+              curl -fL --connect-timeout 20 --max-time 240 --retry 2 --retry-all-errors "$URL" -o "$TMP_ZIP"
+            fi
+            unzip -q "$TMP_ZIP" -d "$(dirname "$GRADLE_HOME")"
+            rm -f "$TMP_ZIP"
+          fi
+          exec "$GRADLE_HOME/bin/gradle" "$@"
+          SH
+          fi
+          chmod +x android/gradlew
+          cat "$wrapper"
+
+      - name: Install Flutter dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter pub get
+
+      - name: Print Dart error contexts
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in \
+            'lib/screens/home_screen.dart:150:175' \
+            'lib/screens/vehicle_info_screen.dart:1:18' \
+            'lib/services/bluetooth_service.dart:1:260' \
+            'lib/services/obd_service.dart:1:260' \
+            'lib/services/bluetooth_service.dart:145:190'
+          do
+            file="$(printf '%s' "$spec" | cut -d: -f1)"
+            start="$(printf '%s' "$spec" | cut -d: -f2)"
+            end="$(printf '%s' "$spec" | cut -d: -f3)"
+            echo "---- $file:$start-$end ----"
+            awk -v s="$start" -v e="$end" 'NR >= s && NR <= e { printf "%5d %s\n", NR, $0 }' "$file"
+          done
+
+      - name: Apply audited Dart source fixes
+        run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+
+      - name: Analyze Dart
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run Dart tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
+            flutter test
+          else
+            echo '::warning::No Dart test files found; hardware validation remains required.'
+          fi
+
+      - name: Build release APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter build apk --release --no-pub --verbose
+
+      - name: Verify APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -euo pipefail
+          apk='build/app/outputs/flutter-apk/app-release.apk'
+          test -s "$apk"
+          sha256sum "$apk"
+          ls -lh "$apk"
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: torqscan-dz-android-apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+,
+                  'android.builtInKotlin=false',
+                  properties_text,
+              )
+              gradle_properties.write_text(properties_text)
+
+          settings_text = settings_file.read_text()
+          app_text = app_build_file.read_text()
+          if 'org.jetbrains.kotlin.android' not in settings_text or 'version "2.2.20"' not in settings_text:
+              raise RuntimeError('Explicit Kotlin Android plugin 2.2.20 was not configured in settings.gradle.')
+          if 'org.jetbrains.kotlin.android' not in app_text:
+              raise RuntimeError('Kotlin Android plugin was not applied to the app module.')
           print('Updated Gradle declarations:', ', '.join(changed) if changed else 'none')
           for path in sorted(root.rglob('*')):
               if path.is_file() and path.suffix in suffixes:

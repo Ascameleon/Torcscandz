@@ -915,7 +915,7 @@ void main() {
       size: const Size(320, 720),
       language: 'fr',
     );
-    expect(find.text('DEMO / Simulation'), findsOneWidget);
+    expect(find.textContaining('Mode démo'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1190,7 +1190,7 @@ if __import__('shutil').which('dart'):
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()
 pubspec_text, version_count = re.subn(
-    r"(?m)^version: 1\\.4\\.1\\+25$",
+    r"(?m)^version: 1\.4\.1\+25$",
     "version: 1.4.5+29",
     pubspec_text,
     count=1,

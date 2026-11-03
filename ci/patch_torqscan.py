@@ -841,8 +841,8 @@ selector_text, generation_count = re.subn(
 )
 selector_text, details_count = re.subn(
     r"child:\s*Text\('\$\{profile\.year\}\\n\$\{profile\.engine\}\\n\$\{profile\.body\}'\)",
-    """child: Text(
-                      profile.year + '\\n' + profile.engine + '\\n' + profile.body,
+    lambda _: r"""child: Text(
+                      profile.year + '\n' + profile.engine + '\n' + profile.body,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     )""",

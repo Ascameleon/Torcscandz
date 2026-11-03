@@ -1919,6 +1919,9 @@ vehicle_source = """class VehicleModel {
   final List<String> engines;
   const VehicleModel({required this.id, required this.brand, required this.model,
     required this.year, required this.body, required this.image, required this.engines});
+  String get displayName => '$brand $model';
+  String get generation => year;
+  String get engine => engines.isEmpty ? '—' : engines.first;
 }
 class VehicleCatalog {
   static VehicleModel _v(String id, String brand, String model, String year,
@@ -1941,6 +1944,8 @@ class VehicleCatalog {
     for row in catalog_rows
 ) + """  ];
   static List<String> get brands => vehicles.map((v) => v.brand).toSet().toList()..sort();
+  static List<VehicleModel> modelsForBrand(String brand) =>
+      vehicles.where((vehicle) => vehicle.brand == brand).toList();
   static VehicleModel? byId(String? id) {
     for (final vehicle in vehicles) { if (vehicle.id == id) return vehicle; }
     return null;
@@ -2010,7 +2015,7 @@ class VehicleSelectorScreen extends StatefulWidget {
 }
 class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
   String _query = '';
-  String _brand = 'Toutes';
+  String _brand = '';
   VehicleModel? _selected;
   String? _selectedEngine;
 
@@ -2031,7 +2036,7 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
     final brands = [allBrands, ...VehicleCatalog.brands];
     final q = _query.trim().toLowerCase();
     final list = VehicleCatalog.vehicles.where((v) {
-      final matchesBrand = _brand == allBrands || v.brand == _brand;
+      final matchesBrand = _brand.isEmpty || v.brand == _brand;
       final searchable = (v.brand + ' ' + v.model + ' ' + v.year + ' ' + v.engines.join(' ')).toLowerCase();
       return matchesBrand && searchable.contains(q);
     }).toList();
@@ -2062,8 +2067,8 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
           separatorBuilder: (_, __) => const SizedBox(width: 8),
           itemBuilder: (_, i) => ChoiceChip(
             label: Text(brands[i]),
-            selected: _brand == brands[i],
-            onSelected: (_) => setState(() => _brand = brands[i]),
+            selected: i == 0 ? _brand.isEmpty : _brand == brands[i],
+            onSelected: (_) => setState(() => _brand = i == 0 ? '' : brands[i]),
           ),
         )),
         Expanded(child: list.isEmpty
@@ -2179,12 +2184,17 @@ import 'package:torqscan/models/vehicle.dart';
 void main() {
   group('Vehicle catalogue', () {
     test('contains broad global make and model coverage', () {
-      expect(VehicleCatalog.vehicles.length, greaterThanOrEqualTo(90));
-      expect(VehicleCatalog.brands.length, greaterThanOrEqualTo(40));
+      expect(VehicleCatalog.vehicles.length, greaterThanOrEqualTo(244));
+      expect(VehicleCatalog.brands.length, greaterThanOrEqualTo(57));
       expect(VehicleCatalog.byId('peugeot_208')?.model, '208');
       expect(VehicleCatalog.byId('toyota_rav4')?.brand, 'Toyota');
       expect(VehicleCatalog.byId('tesla_modely')?.model, 'Model Y');
       expect(VehicleCatalog.byId('generic_obd'), isNotNull);
+      final dacia = VehicleCatalog.modelsForBrand('Dacia').map((v) => v.model).toSet();
+      final peugeot = VehicleCatalog.modelsForBrand('Peugeot').map((v) => v.model).toSet();
+      expect(dacia, containsAll(['Sandero', 'Sandero Stepway', 'Duster', 'Logan', 'Jogger', 'Lodgy', 'Dokker', 'Spring', 'Bigster']));
+      expect(peugeot, containsAll(['106', '206', '207', '208', '301', '307', '308', '406', '407', '508', '2008', '3008', '5008', 'Partner', 'Rifter', 'Expert']));
+      expect(VehicleCatalog.vehicles.every((v) => v.displayName.isNotEmpty && v.generation.isNotEmpty && v.engine.trim().isNotEmpty), isTrue);
     });
     test('every model has a stable unique ID and engine choices', () {
       final ids = VehicleCatalog.vehicles.map((v) => v.id).toList();
@@ -2252,7 +2262,7 @@ void main() {
   for (final width in [320.0, 360.0]) {
     testWidgets('vehicle selector supports search and engine choice at ' + width.toString() + ' px', (tester) async {
       await pumpSelector(tester, width: width);
-      expect(find.text('118 modèles'), findsOneWidget);
+      expect(find.text('243 modèles'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Peugeot 208');
       await tester.pumpAndSettle();
       expect(find.text('Peugeot 208'), findsOneWidget);
@@ -2281,7 +2291,7 @@ void main() {
 changes.append(str(selector_test.relative_to(project)))
 
 if __import__('shutil').which('dart'):
-    subprocess.run(["dart","format",str(vehicle_file),str(selector),str(settings_file),str(home),str(catalog_test)],check=True,cwd=project)
+    subprocess.run(["dart","format",str(vehicle_file),str(selector),str(settings_file),str(home),str(catalog_test),str(selector_test)],check=True,cwd=project)
 
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()

@@ -69,6 +69,8 @@ vehicle_card = """  Widget _vehicleCard(BuildContext context, VehicleModel? vehi
                       Text(
                         tr(context, 'choose_model'),
                         style: Theme.of(context).textTheme.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -85,63 +87,78 @@ vehicle_card = """  Widget _vehicleCard(BuildContext context, VehicleModel? vehi
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: openSelector,
-        child: SizedBox(
-          height: 150,
-          child: Row(
-            children: [
-              Expanded(
-                flex: 5,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        tr(context, 'selected_vehicle'),
-                        style: Theme.of(context).textTheme.bodySmall,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 360;
+            final imageWidth =
+                (constraints.maxWidth * 0.34).clamp(84.0, 124.0).toDouble();
+            return SizedBox(
+              height: compact ? 166 : 154,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            tr(context, 'selected_vehicle'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${vehicle.brand} ${vehicle.model}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: compact ? 18 : 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            '${vehicle.year} • ${vehicle.body}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            tr(context, 'change'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${vehicle.brand} ${vehicle.model}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        '${vehicle.year} • ${vehicle.body}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        tr(context, 'change'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 5,
-                child: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Image.asset(
-                    vehicle.image,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.directions_car,
-                      size: 64,
                     ),
                   ),
-                ),
+                  SizedBox(
+                    width: imageWidth,
+                    height: compact ? 166 : 154,
+                    child: Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Image.asset(
+                        vehicle.image,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.directions_car,
+                          size: 64,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -172,9 +189,16 @@ device_tile = """  Widget _deviceTile(BuildContext context, BluetoothDevice devi
               : Theme.of(context).colorScheme.surfaceContainerHighest,
           child: Icon(isObd ? Icons.car_repair : Icons.bluetooth),
         ),
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Text(
           device.address,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall,
         ),
         trailing: const Icon(Icons.chevron_right),
@@ -748,17 +772,147 @@ if old_builder not in main_text:
 main_file.write_text(main_text.replace(old_builder, new_builder))
 changes.append(str(main_file.relative_to(project)))
 
+# Adapt the vehicle selector to compact phones and prevent long model labels
+# from forcing grid cards or their action controls outside the viewport.
+selector_file = project / "lib/screens/vehicle_selector_screen.dart"
+selector_text = selector_file.read_text()
+if "        Expanded(child: GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .9), itemCount: list.length, itemBuilder: (_, i) => _vehicleCard(context, list[i])))," not in selector_text:
+    raise RuntimeError("Expected vehicle selector grid was not found")
+selector_text = selector_text.replace("        Expanded(child: GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .9), itemCount: list.length, itemBuilder: (_, i) => _vehicleCard(context, list[i]))),", "        Expanded(\n          child: LayoutBuilder(\n            builder: (context, constraints) {\n              final columns = constraints.maxWidth < 340 ? 1 : 2;\n              return GridView.builder(\n                padding: const EdgeInsets.all(16),\n                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(\n                  crossAxisCount: columns,\n                  crossAxisSpacing: 12,\n                  mainAxisSpacing: 12,\n                  childAspectRatio: columns == 1 ? 2.05 : 0.9,\n                ),\n                itemCount: list.length,\n                itemBuilder: (_, i) => _vehicleCard(context, list[i]),\n              );\n            },\n          ),\n        ),")
+selector_text = selector_text.replace(
+    """Text('${v.brand} ${v.model}', style: const TextStyle(fontWeight: FontWeight.bold))""",
+    """Text(
+              '${v.brand} ${v.model}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            )""",
+)
+selector_text = selector_text.replace(
+    """Text('${v.year} • ${v.body}', style: Theme.of(context).textTheme.bodySmall)""",
+    """Text(
+              '${v.year} • ${v.body}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            )""",
+)
+if "constraints.maxWidth < 340" not in selector_text:
+    raise RuntimeError("Responsive vehicle selector breakpoint was not applied")
+selector_file.write_text(selector_text)
+changes.append(str(selector_file.relative_to(project)))
+
+responsive_test = project / "test" / "responsive_vehicle_selector_test.dart"
+responsive_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/screens/vehicle_selector_screen.dart';
+
+Future<AppSettings> pumpSelector(
+  WidgetTester tester, {
+  required Size size,
+  required String language,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  final settings = AppSettings()..language = language;
+
+  await tester.pumpWidget(
+    ChangeNotifierProvider.value(
+      value: settings,
+      child: MaterialApp(
+        home: const VehicleSelectorScreen(),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(textScaler: TextScaler.linear(1.15)),
+            child: Directionality(
+              textDirection:
+                  language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+              child: child!,
+            ),
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+  return settings;
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('compact French selector stays inside a 320px phone', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settings = await pumpSelector(
+      tester,
+      size: const Size(320, 720),
+      language: 'fr',
+    );
+
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    final delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 1);
+
+    await tester.enterText(find.byType(TextField), 'Mercedes');
+    await tester.pumpAndSettle();
+    expect(find.text('Mercedes-Benz Classe C'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Mercedes-Benz Classe C'));
+    await tester.pump();
+    await tester.tap(find.text('Enregistrer'));
+    await tester.pumpAndSettle();
+    expect(settings.selectedVehicleId, 'mercedes_c');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('standard Arabic selector keeps a two-column grid without overflow', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await pumpSelector(
+      tester,
+      size: const Size(360, 780),
+      language: 'ar',
+    );
+
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    final delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 2);
+    expect(tester.takeException(), isNull);
+  });
+}
+""")
+changes.append(str(responsive_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(
+        ["dart", "format", str(selector_file), str(responsive_test)],
+        check=True,
+        cwd=project,
+    )
+
 # Increment the Android package version for this responsive-layout release.
 pubspec = project / "pubspec.yaml"
-pubspec_text = pubspec.read_text().replace("version: 1.4.1+25", "version: 1.4.3+27")
-if "version: 1.4.3+27" not in pubspec_text:
-    raise RuntimeError("Could not set the responsive release version 1.4.3+27")
+pubspec_text = pubspec.read_text().replace("version: 1.4.1+25", "version: 1.4.4+28")
+if "version: 1.4.4+28" not in pubspec_text:
+    raise RuntimeError("Could not set the responsive release version 1.4.4+28")
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 
 
 report = {
-    "patch": "torqscan-dart-compile-fixes-v1",
+    "patch": "torqscan-responsive-selector-v2",
     "files": {name: sha256(project / name) for name in changes},
     "socket_destroyed_references": 0,
 }

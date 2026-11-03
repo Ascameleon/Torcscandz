@@ -508,7 +508,7 @@ changes.append(str(main_file.relative_to(project)))
 
 settings_file = project / "lib/core/app_settings.dart"
 settings_text = settings_file.read_text()
-settings_text = settings_text.replace("ThemeMode themeMode = ThemeMode.light;", "ThemeMode themeMode = ThemeMode.dark;")
+settings_text = settings_text.replace("ThemeMode themeMode = ThemeMode.dark;", "ThemeMode themeMode = ThemeMode.light;")
 settings_text = settings_text.replace("Dz Torqscan", "Torque ScanDZ")
 settings_file.write_text(settings_text)
 changes.append(str(settings_file.relative_to(project)))

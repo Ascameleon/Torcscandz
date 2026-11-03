@@ -778,9 +778,16 @@ changes.append(str(main_file.relative_to(project)))
 selector_file = project / "lib/screens/vehicle_selector_screen.dart"
 selector_text = selector_file.read_text()
 selector_start = selector_text.find("        Expanded(")
-selector_end = selector_text.find("\n      ]),", selector_start)
+# Flutter formatting runs before this patch and expands the original one-line
+# Expanded/GridView into a multiline widget. Replace the Expanded expression
+# itself, not the enclosing Column children terminator (whose indentation varies).
+selector_end_marker = "\n        ),"
+selector_end = selector_text.find(selector_end_marker, selector_start)
 if selector_start < 0 or selector_end < 0:
-    raise RuntimeError("Expected vehicle selector grid bounds were not found")
+    raise RuntimeError(
+        "Expected formatted vehicle selector Expanded widget was not found"
+    )
+selector_end += len(selector_end_marker)
 responsive_grid = """        Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {

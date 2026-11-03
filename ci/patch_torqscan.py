@@ -646,7 +646,6 @@ changes.append(str(test_file.relative_to(project)))
 if __import__('shutil').which('dart'):
     subprocess.run(
         ["dart", "format", str(project / "lib/models/vehicle.dart"),
-         str(project / "lib/screens/vehicle_selector_screen.dart"),
          str(project / "lib/screens/home_screen.dart")],
         check=True,
         cwd=project,
@@ -747,8 +746,7 @@ dashboard_text = dashboard_text.replace(
 dashboard_file.write_text(dashboard_text)
 changes.append(str(dashboard_file.relative_to(project)))
 
-# Keep Android accessibility text scaling, but cap extreme scaling to a
-# phone-safe ceiling so selector chips, icons and fixed action areas stay inside.
+# Preserve Android's native text scaling; responsive widgets must handle it.
 main_file = project / "lib/main.dart"
 main_text = main_file.read_text()
 old_builder = """        builder: (context, child) => Directionality(
@@ -756,18 +754,7 @@ old_builder = """        builder: (context, child) => Directionality(
           child: child!,
         ),
 """
-new_builder = """        builder: (context, child) {
-          final media = MediaQuery.of(context);
-          final safeScale = media.textScaler.scale(1).clamp(0.9, 1.15).toDouble();
-          return MediaQuery(
-            data: media.copyWith(textScaler: TextScaler.linear(safeScale)),
-            child: Directionality(
-              textDirection: settings.isArabic ? TextDirection.rtl : TextDirection.ltr,
-              child: child!,
-            ),
-          );
-        },
-"""
+new_builder = old_builder
 if old_builder not in main_text:
     raise RuntimeError("Expected MaterialApp builder was not found for responsive text scaling")
 main_file.write_text(main_text.replace(old_builder, new_builder))
@@ -783,81 +770,121 @@ grid_match = re.search(r"GridView\s*\.\s*builder\s*\(", selector_text)
 if grid_match is None:
     raise RuntimeError("Vehicle selector GridView.builder widget was not found")
 expanded_matches = list(
-    re.finditer(r"\bExpanded\s*\(", selector_text[:grid_match.start()])
-)
-if not expanded_matches:
-    raise RuntimeError("Vehicle selector GridView is not wrapped in Expanded")
-selector_start = expanded_matches[-1].start()
-open_parens = 0
-in_string = None
-escaped = False
-selector_end = None
-for index in range(selector_start, len(selector_text)):
-    char = selector_text[index]
-    if in_string:
-        if escaped:
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == in_string:
-            in_string = None
-        continue
-    if char in ("'", '"'):
-        in_string = char
-    elif char == "(":
-        open_parens += 1
-    elif char == ")":
-        open_parens -= 1
-        if open_parens == 0:
-            selector_end = index + 1
-            break
-if selector_end is None:
-    raise RuntimeError("Vehicle selector Expanded widget has unbalanced parentheses")
-responsive_grid = """        Expanded(
-          child: LayoutBuilder(
+   # Adapt the actual three-step vehicle selector (ListView, not a vehicle grid)
+# so brand chips, model names, generation details and action labels stay bounded.
+selector_file = project / "lib/screens/vehicle_selector_screen.dart"
+selector_text = selector_file.read_text()
+
+selector_text = replace_between(
+    selector_text,
+    "          Wrap(\n",
+    "          const SizedBox(height: 22),",
+    """          LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth < 340 ? 1 : 2;
-              return GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: columns == 1 ? 2.05 : 0.9,
-                ),
-                itemCount: list.length,
-                itemBuilder: (_, i) => _vehicleCard(context, list[i]),
+              final compact = constraints.maxWidth < 420;
+              final chipWidth = compact
+                  ? (constraints.maxWidth - 8) / 2
+                  : (constraints.maxWidth - 16) / 3;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: brands.map((brand) => ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: chipWidth),
+                  child: ChoiceChip(
+                    label: Text(
+                      brand,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    selected: _brand == brand,
+                    onSelected: (_) => setState(() {
+                      _brand = brand;
+                      _model = null;
+                      _selected = null;
+                    }),
+                  ),
+                )).toList(),
               );
             },
           ),
-        ),"""
-selector_text = selector_text[:selector_start] + responsive_grid + selector_text[selector_end:]
-selector_text, title_count = re.subn(
-    r"Text\('\$\{v\.brand\} \$\{v\.model\}',\s*style:\s*const TextStyle\(fontWeight:\s*FontWeight\.bold\)\)",
-    """Text(
-              '${v.brand} ${v.model}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+""",
+    "vehicle_selector.brand_chips",
+)
+
+selector_text, model_count = re.subn(
+    r"DropdownMenuItem\(value: model,\s*child: Text\(model\)\)",
+    """DropdownMenuItem(
+              value: model,
+              child: Text(
+                model,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             )""",
     selector_text,
     count=1,
 )
-selector_text, detail_count = re.subn(
-    r"Text\('\$\{v\.year\} • \$\{v\.body\}',\s*style:\s*Theme\.of\(context\)\.textTheme\.bodySmall\)",
-    """Text(
-              '${v.year} • ${v.body}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            )""",
+selector_text, generation_count = re.subn(
+    r"title:\s*Text\(profile\.generation,\s*style:\s*const TextStyle\(fontWeight:\s*FontWeight\.w700\)\)",
+    """title: Text(
+                    profile.generation,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  )""",
+    selector_text,
+    count=1,
+    flags=re.S,
+)
+selector_text, details_count = re.subn(
+    r"child:\s*Text\('\$\{profile\.year\}\\n\$\{profile\.engine\}\\n\$\{profile\.body\}'\)",
+    """child: Text(
+                      profile.year + '\\n' + profile.engine + '\\n' + profile.body,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    )""",
     selector_text,
     count=1,
 )
-if "constraints.maxWidth < 340" not in selector_text:
-    raise RuntimeError("Responsive vehicle selector breakpoint was not applied")
-if title_count != 1 or detail_count != 1:
-    raise RuntimeError(f"Vehicle selector text guards missing: title={title_count}, details={detail_count}")
+if model_count != 1 or generation_count != 1 or details_count != 1:
+    raise RuntimeError(
+        "Responsive selector text guards missing: "
+        f"model={model_count}, generation={generation_count}, details={details_count}"
+    )
+
+selector_text = selector_text.replace(
+    "                  isThreeLine: true,",
+    """                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  dense: true,
+                  isThreeLine: true,""",
+    1,
+)
+selector_text = selector_text.replace(
+    "            label: const Text('Je ne trouve pas mon véhicule — OBD-II / EOBD'),",
+    """            label: const Flexible(
+              child: Text(
+                'Je ne trouve pas mon véhicule — OBD-II / EOBD',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),""",
+    1,
+)
+selector_text = selector_text.replace(
+    "            label: const Text('Valider ce véhicule'),",
+    """            label: const Flexible(
+              child: Text(
+                'Valider ce véhicule',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),""",
+    1,
+)
 selector_file.write_text(selector_text)
 changes.append(str(selector_file.relative_to(project)))
 
@@ -885,7 +912,7 @@ Future<AppSettings> pumpSelector(
         builder: (context, child) {
           final media = MediaQuery.of(context);
           return MediaQuery(
-            data: media.copyWith(textScaler: TextScaler.linear(1.15)),
+            data: media.copyWith(textScaler: TextScaler.linear(1.3)),
             child: Directionality(
               textDirection:
                   language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
@@ -904,7 +931,7 @@ Future<AppSettings> pumpSelector(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('compact French selector stays inside a 320px phone', (
+  testWidgets('320px French selector completes manufacturer/model/profile selection without overflow', (
     tester,
   ) async {
     addTearDown(tester.view.resetPhysicalSize);
@@ -915,25 +942,34 @@ void main() {
       language: 'fr',
     );
 
-    final grid = tester.widget<GridView>(find.byType(GridView));
-    final delegate =
-        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-    expect(delegate.crossAxisCount, 1);
-
+    expect(find.byType(ListView), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'Mercedes');
     await tester.pumpAndSettle();
-    expect(find.text('Mercedes-Benz Classe C'), findsOneWidget);
+    expect(find.text('Mercedes-Benz'), findsOneWidget);
+
+    await tester.tap(find.text('Mercedes-Benz'));
+    await tester.pumpAndSettle();
+    final modelField = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(modelField);
+    await tester.tap(modelField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Classe C').last);
+    await tester.pumpAndSettle();
+
+    final profileTile = find.byType(RadioListTile<String>);
+    await tester.ensureVisible(profileTile);
+    expect(find.text('W203–W206'), findsOneWidget);
+    await tester.tap(profileTile);
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Mercedes-Benz Classe C'));
+    await tester.tap(find.text('Valider ce véhicule'));
     await tester.pump();
-    await tester.tap(find.text('Enregistrer'));
-    await tester.pumpAndSettle();
     expect(settings.selectedVehicleId, 'mercedes_c');
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('standard Arabic selector keeps a two-column grid without overflow', (
+  testWidgets('360px RTL selector remains scrollable with reachable actions', (
     tester,
   ) async {
     addTearDown(tester.view.resetPhysicalSize);
@@ -944,10 +980,12 @@ void main() {
       language: 'ar',
     );
 
-    final grid = tester.widget<GridView>(find.byType(GridView));
-    final delegate =
-        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-    expect(delegate.crossAxisCount, 2);
+    final list = find.byType(ListView);
+    expect(list, findsOneWidget);
+    expect(Directionality.of(tester.element(list)), TextDirection.rtl);
+    await tester.drag(list, const Offset(0, -520));
+    await tester.pumpAndSettle();
+    expect(find.text('Valider ce véhicule'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -961,19 +999,5 @@ if __import__('shutil').which('dart'):
         cwd=project,
     )
 
-# Increment the Android package version for this responsive-layout release.
-pubspec = project / "pubspec.yaml"
-pubspec_text = pubspec.read_text().replace("version: 1.4.1+25", "version: 1.4.4+28")
-if "version: 1.4.4+28" not in pubspec_text:
-    raise RuntimeError("Could not set the responsive release version 1.4.4+28")
-pubspec.write_text(pubspec_text)
-changes.append(str(pubspec.relative_to(project)))
-
-
-report = {
-    "patch": "torqscan-responsive-selector-v2",
-    "files": {name: sha256(project / name) for name in changes},
-    "socket_destroyed_references": 0,
-}
-(project / "torqscan-patch-report.json").write_text(json.dumps(report, indent=2) + "\n")
+json").write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps({"status": "patched", "files": changes, "report": report}, indent=2))

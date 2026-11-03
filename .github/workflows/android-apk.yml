@@ -7,6 +7,7 @@ on:
       - 'DzTorqscan_v1.4.0_complete.zip'
       - 'DzTorqscan_source_recovery_*.zip'
       - '.github/workflows/android-apk.yml'
+      - 'ci/patch_torqscan.py'
   push:
     branches: [main]
     paths:

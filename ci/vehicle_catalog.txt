@@ -1,0 +1,119 @@
+abarth_595|Abarth|595|2016–2024|Citadine|1.4 T-Jet essence;1.4 T-Jet 165 essence;1.4 T-Jet 180 essence
+abarth_500e|Abarth|500e|2023–2026|Électrique|42 kWh électrique
+alfa_giulia|Alfa Romeo|Giulia|2016–2026|Berline|2.0 Turbo essence;2.2 JTD diesel;2.9 V6 Quadrifoglio essence
+alfa_stelvio|Alfa Romeo|Stelvio|2017–2026|SUV|2.0 Turbo essence;2.2 JTD diesel;2.9 V6 essence
+audi_a1|Audi|A1|2018–2026|Citadine|1.0 TFSI essence;1.5 TFSI essence;2.0 TFSI essence
+audi_a3|Audi|A3|2019–2026|Compacte|1.0 TFSI essence;1.5 TFSI essence;2.0 TFSI essence;2.0 TDI diesel;1.4 TFSI e hybride rechargeable
+audi_a4|Audi|A4|2016–2024|Berline|2.0 TFSI essence;2.0 TDI diesel;3.0 TDI V6 diesel
+audi_q3|Audi|Q3|2018–2026|SUV|1.5 TFSI essence;2.0 TFSI essence;2.0 TDI diesel
+audi_q5|Audi|Q5|2017–2026|SUV|2.0 TFSI essence;2.0 TDI diesel;3.0 TDI diesel;TFSI e hybride rechargeable
+bmw_serie1|BMW|Série 1|2019–2026|Compacte|118i 1.5 essence;120i 2.0 essence;M135i essence;116d diesel;118d diesel
+bmw_serie3|BMW|Série 3|2018–2026|Berline|318i/320i essence;330i essence;M340i essence;318d/320d diesel;330e hybride rechargeable
+bmw_serie5|BMW|Série 5|2017–2026|Berline|520i/530i essence;540i V6 essence;520d/530d diesel;530e hybride rechargeable
+bmw_x1|BMW|X1|2022–2026|SUV|sDrive18i essence;sDrive18d diesel;xDrive23i essence;xDrive25e hybride rechargeable
+bmw_x3|BMW|X3|2017–2026|SUV|20i/30i essence;M40i essence;18d/20d/30d diesel;30e hybride rechargeable
+byd_atto3|BYD|Atto 3|2022–2026|SUV électrique|49.9 kWh électrique;60.5 kWh électrique
+byd_dolphin|BYD|Dolphin|2023–2026|Compacte électrique|44.9 kWh électrique;60.4 kWh électrique
+byd_seal|BYD|Seal|2023–2026|Berline électrique|Électrique propulsion;Électrique AWD
+cadillac_ct5|Cadillac|CT5|2020–2026|Berline|2.0 Turbo essence;3.0 V6 biturbo;6.2 V8 Blackwing
+chevrolet_cruze|Chevrolet|Cruze|2016–2023|Berline|1.4 Turbo essence;1.5 essence;1.6 diesel;2.0 diesel
+chevrolet_malibu|Chevrolet|Malibu|2016–2025|Berline|1.5 Turbo essence;2.0 Turbo essence;1.8 hybride
+chevrolet_trailblazer|Chevrolet|Trailblazer|2020–2026|SUV|1.2 Turbo essence;1.3 Turbo essence
+citroen_c3|Citroën|C3|2016–2026|Citadine|1.2 PureTech essence;1.5 BlueHDi diesel;ë-C3 électrique
+citroen_c4|Citroën|C4|2020–2026|Compacte|1.2 PureTech essence;1.5 BlueHDi diesel;Hybrid 48V;ë-C4 électrique
+citroen_c5aircross|Citroën|C5 Aircross|2018–2026|SUV|1.2 PureTech essence;1.6 essence;1.5/2.0 BlueHDi diesel;Plug-in Hybrid
+cupra_formentor|Cupra|Formentor|2020–2026|SUV|1.5 TSI essence;2.0 TSI essence;2.0 TDI diesel;1.4 e-Hybrid rechargeable
+cupra_leon|Cupra|Leon|2020–2026|Compacte|1.5 eTSI essence;2.0 TSI essence;2.0 TDI diesel;1.4 e-Hybrid rechargeable
+dacia_duster|Dacia|Duster|2018–2026|SUV|1.0 TCe essence;1.2/1.3 TCe essence;1.5 dCi diesel;1.5 Blue dCi diesel;Hybrid 140/155
+dacia_jogger|Dacia|Jogger|2022–2026|Familiale|1.0 TCe essence;1.0 ECO-G GPL;Hybrid 140/155
+dacia_logan|Dacia|Logan|2012–2026|Berline|1.0 SCe essence;1.0 TCe essence;1.0 ECO-G GPL;1.5 dCi diesel
+dacia_sandero|Dacia|Sandero|2012–2026|Citadine|1.0 SCe essence;1.0 TCe essence;1.0 ECO-G GPL;1.5 dCi diesel
+ds_ds4|DS Automobiles|DS 4|2021–2026|Compacte|1.2 PureTech essence;1.5 BlueHDi diesel;1.6 E-Tense hybride rechargeable
+fiat_500|Fiat|500|2015–2026|Citadine|1.0 FireFly mild-hybrid;1.2 essence;1.4 essence;24/42 kWh électrique
+fiat_tipo|Fiat|Tipo|2016–2026|Berline|1.0 FireFly essence;1.4 T-Jet essence;1.3/1.6 Multijet diesel
+fiat_600|Fiat|600|2023–2026|SUV urbain|1.2 Hybrid essence;54 kWh électrique
+ford_fiesta|Ford|Fiesta|2017–2023|Citadine|1.0 EcoBoost essence;1.1 Ti-VCT essence;1.5 TDCi diesel
+ford_focus|Ford|Focus|2018–2026|Compacte|1.0/1.5 EcoBoost essence;1.5/2.0 EcoBlue diesel
+ford_kuga|Ford|Kuga|2019–2026|SUV|1.5 EcoBoost essence;2.0 EcoBlue diesel;2.5 FHEV hybride;2.5 PHEV rechargeable
+ford_ranger|Ford|Ranger|2019–2026|Pick-up|2.0 EcoBlue diesel;3.0 V6 diesel;2.3 EcoBoost essence;3.0 V6 Raptor essence
+geely_coolray|Geely|Coolray|2019–2026|SUV|1.5 Turbo essence;1.5 Turbo mild-hybrid
+geely_geometryc|Geely|Geometry C|2021–2026|SUV électrique|53 kWh électrique;70 kWh électrique
+genesis_g70|Genesis|G70|2018–2026|Berline|2.0/2.5 Turbo essence;3.3 V6 biturbo;2.2 diesel
+honda_civic|Honda|Civic|2016–2026|Compacte|1.0/1.5 VTEC Turbo essence;2.0 i-VTEC essence;2.0 e:HEV hybride
+honda_crv|Honda|CR-V|2017–2026|SUV|1.5 VTEC Turbo essence;2.0 i-MMD/e:HEV hybride;2.0 PHEV rechargeable
+honda_hrv|Honda|HR-V|2015–2026|SUV urbain|1.5 i-VTEC essence;1.5 Turbo essence;1.5 e:HEV hybride
+hyundai_i20|Hyundai|i20|2020–2026|Citadine|1.0 T-GDi essence;1.2 MPI essence;1.0 T-GDi 48V mild-hybrid
+hyundai_i30|Hyundai|i30|2017–2026|Compacte|1.0/1.5 T-GDi essence;1.6 CRDi diesel;2.0 T-GDi N
+hyundai_tucson|Hyundai|Tucson|2020–2026|SUV|1.6 T-GDi essence;1.6 CRDi diesel;1.6 HEV hybride;1.6 PHEV rechargeable
+hyundai_kona|Hyundai|Kona|2017–2026|SUV urbain|1.0/1.6 T-GDi essence;1.6 GDi hybride;48/65 kWh électrique
+infiniti_q50|Infiniti|Q50|2014–2024|Berline|2.0 Turbo essence;3.0 V6 biturbo;3.5 V6 hybride;2.2 diesel
+jaguar_xe|Jaguar|XE|2015–2024|Berline|2.0 Ingenium essence;2.0 Ingenium diesel;3.0 V6 essence
+jaguar_fpace|Jaguar|F-Pace|2016–2026|SUV|2.0 Ingenium essence/diesel;3.0 mild-hybrid;5.0 V8 essence;PHEV rechargeable
+jeep_compass|Jeep|Compass|2017–2026|SUV|1.3 Turbo essence;1.4 MultiAir essence;1.6/2.0 diesel;4xe hybride rechargeable
+jeep_cherokee|Jeep|Cherokee|2014–2023|SUV|2.0 Turbo essence;2.4 MultiAir essence;3.2 V6 essence;2.2 diesel
+kia_ceed|Kia|Ceed|2018–2026|Compacte|1.0/1.5 T-GDi essence;1.6 CRDi diesel;1.6 PHEV
+kia_sportage|Kia|Sportage|2021–2026|SUV|1.6 T-GDi essence;1.6 CRDi diesel;1.6 MHEV;1.6 HEV hybride;1.6 PHEV rechargeable
+kia_niro|Kia|Niro|2016–2026|SUV compact|1.6 GDi hybride;1.6 GDi PHEV;64/65 kWh électrique
+landrover_evoque|Land Rover|Range Rover Evoque|2018–2026|SUV|2.0 Ingenium essence/diesel;1.5 PHEV rechargeable
+landrover_defender|Land Rover|Defender|2020–2026|4x4|2.0 Turbo essence;3.0 I6 essence/diesel MHEV;5.0 V8 essence;PHEV
+lexus_is|Lexus|IS|2013–2026|Berline|2.0 Turbo essence;2.5 hybride;3.5 V6 essence
+lexus_nx|Lexus|NX|2014–2026|SUV|2.0 Turbo essence;2.5 hybride;2.5 PHEV rechargeable
+mazda3|Mazda|3|2019–2026|Compacte|2.0 Skyactiv-G essence;2.5 Skyactiv-G essence;2.0 Skyactiv-X;2.2 Skyactiv-D diesel
+mazda_cx5|Mazda|CX-5|2017–2026|SUV|2.0/2.5 Skyactiv-G essence;2.2 Skyactiv-D diesel
+mazda_cx60|Mazda|CX-60|2022–2026|SUV|2.5 e-Skyactiv PHEV;3.3 e-Skyactiv D diesel MHEV;3.3 e-Skyactiv G essence MHEV
+mercedes_a|Mercedes-Benz|Classe A|2018–2026|Compacte|A 160/180 essence;A 200/250 essence;A 180 d/200 d diesel;A 250 e PHEV;AMG A 35/45
+mercedes_c|Mercedes-Benz|Classe C|2014–2026|Berline|C 180/200 essence;C 220 d/300 d diesel;C 300 e PHEV;AMG C 43/63
+mercedes_e|Mercedes-Benz|Classe E|2016–2026|Berline|E 200/300 essence;E 220 d/300 d diesel;E 300 e/400 e PHEV;AMG E 53
+mercedes_gla|Mercedes-Benz|GLA|2020–2026|SUV|GLA 180/200 essence;GLA 200 d/220 d diesel;GLA 250 e PHEV;AMG GLA 35/45
+mg_zs|MG|ZS|2017–2026|SUV|1.0 Turbo essence;1.5 essence;1.5 Hybrid+;51/72 kWh électrique
+mg4|MG|MG4|2022–2026|Compacte électrique|51 kWh électrique;64 kWh électrique;77 kWh électrique;XPower AWD
+mitsubishi_asx|Mitsubishi|ASX|2017–2026|SUV|1.0/1.3 Turbo essence;1.6 hybride;1.6 PHEV rechargeable
+mitsubishi_outlander|Mitsubishi|Outlander|2013–2026|SUV|2.0/2.4 essence;2.2 DI-D diesel;2.4 PHEV rechargeable
+nissan_juke|Nissan|Juke|2019–2026|SUV urbain|1.0 DIG-T essence;1.6 Hybrid
+nissan_qashqai|Nissan|Qashqai|2017–2026|SUV|1.2 DIG-T essence;1.3 mild-hybrid essence;1.5/1.6 dCi diesel;e-Power hybride
+nissan_xtrail|Nissan|X-Trail|2017–2026|SUV|1.3 DIG-T essence;1.6/1.7 dCi diesel;1.5 VC-T e-Power hybride
+opel_corsa|Opel|Corsa|2019–2026|Citadine|1.2 essence;1.2 Turbo essence;1.5 diesel;Corsa Electric
+opel_astra|Opel|Astra|2015–2026|Compacte|1.2 Turbo essence;1.4 Turbo essence;1.5 diesel;1.6 PHEV;Astra Electric
+opel_grandland|Opel|Grandland|2017–2026|SUV|1.2 Turbo essence;1.5 diesel;1.6 PHEV;Hybrid 48V
+peugeot_208|Peugeot|208|2012–2026|Citadine|1.2 PureTech essence;1.5 BlueHDi diesel;Hybrid 100/136;ë-208 électrique
+peugeot_308|Peugeot|308|2013–2026|Compacte|1.2 PureTech essence;1.5 BlueHDi diesel;1.6 THP essence;Hybrid rechargeable;ë-308 électrique
+peugeot_3008|Peugeot|3008|2016–2026|SUV|1.2 PureTech essence;1.5 BlueHDi diesel;1.6 THP essence;Hybrid 48V;Plug-in Hybrid;E-3008 électrique
+peugeot_5008|Peugeot|5008|2017–2026|SUV familial|1.2 PureTech essence;1.5 BlueHDi diesel;1.6 THP essence;Hybrid;E-5008 électrique
+polestar_2|Polestar|2|2020–2026|Berline électrique|Single Motor électrique;Dual Motor électrique;Performance AWD
+porsche_911|Porsche|911|2012–2026|Coupé sport|3.0 Flat-six biturbo essence;3.8 Flat-six essence;4.0 GT3 atmosphérique;3.6 T-Hybrid
+porsche_cayenne|Porsche|Cayenne|2017–2026|SUV|3.0 V6 Turbo essence;2.9 V6 biturbo;4.0 V8 biturbo;E-Hybrid PHEV;Diesel selon génération
+porsche_macan|Porsche|Macan|2014–2026|SUV|2.0 Turbo essence;2.9 V6 biturbo;3.0 V6 essence;Macan Electric
+renault_clio|Renault|Clio|2012–2026|Citadine|0.9 TCe essence;1.0 SCe/TCe essence;1.2 TCe essence;1.5 dCi diesel;E-Tech full hybrid
+renault_megane|Renault|Mégane|2016–2026|Compacte|1.3 TCe essence;1.5 dCi diesel;1.6 E-Tech PHEV;Mégane E-Tech électrique
+renault_captur|Renault|Captur|2013–2026|SUV urbain|0.9/1.0 TCe essence;1.3 TCe essence;1.5 dCi diesel;E-Tech full hybrid;E-Tech PHEV
+renault_austral|Renault|Austral|2022–2026|SUV|1.2 mild-hybrid essence;1.3 mild-hybrid essence;E-Tech full hybrid 200
+seat_ibiza|SEAT|Ibiza|2017–2026|Citadine|1.0 MPI essence;1.0 TSI essence;1.5 TSI essence;1.6 TDI diesel
+seat_leon|SEAT|Leon|2020–2026|Compacte|1.0 TSI essence;1.5 TSI/eTSI essence;2.0 TSI essence;2.0 TDI diesel;1.4 e-Hybrid PHEV
+skoda_fabia|Škoda|Fabia|2021–2026|Citadine|1.0 MPI essence;1.0 TSI essence;1.5 TSI essence
+skoda_octavia|Škoda|Octavia|2019–2026|Berline|1.0 TSI essence;1.5 TSI/eTSI essence;2.0 TSI essence;2.0 TDI diesel;1.4/1.5 PHEV
+skoda_kodiaq|Škoda|Kodiaq|2017–2026|SUV|1.5 TSI essence;2.0 TSI essence;2.0 TDI diesel;PHEV rechargeable
+subaru_forester|Subaru|Forester|2018–2026|SUV|2.0 Boxer essence;2.5 Boxer essence;2.0 e-Boxer hybride
+subaru_impreza|Subaru|Impreza|2016–2026|Compacte|1.6 Boxer essence;2.0 Boxer essence;2.0 e-Boxer hybride
+suzuki_swift|Suzuki|Swift|2017–2026|Citadine|1.2 Dualjet essence;1.0 Boosterjet essence;1.2 mild-hybrid
+suzuki_vitara|Suzuki|Vitara|2015–2026|SUV|1.0/1.4 Boosterjet essence;1.6 VVT essence;1.5 Strong Hybrid
+tesla_model3|Tesla|Model 3|2017–2026|Berline électrique|Propulsion électrique;Long Range AWD électrique;Performance AWD électrique
+tesla_modely|Tesla|Model Y|2020–2026|SUV électrique|Propulsion électrique;Long Range AWD électrique;Performance AWD électrique
+toyota_yaris|Toyota|Yaris|2011–2026|Citadine|1.0 VVT-i essence;1.3/1.5 VVT-i essence;1.5 Hybrid;1.5 Dynamic Force Hybrid
+toyota_corolla|Toyota|Corolla|2013–2026|Berline|1.2 Turbo essence;1.6/1.8 essence;1.8 Hybrid;2.0 Hybrid;1.4 D-4D diesel
+toyota_rav4|Toyota|RAV4|2013–2026|SUV|2.0/2.5 essence;2.5 Hybrid;2.5 Plug-in Hybrid;2.2 D-4D diesel
+toyota_hilux|Toyota|Hilux|2015–2026|Pick-up|2.4 D-4D diesel;2.8 D-4D diesel;2.7 essence;2.4 mild-hybrid diesel
+vw_polo|Volkswagen|Polo|2017–2026|Citadine|1.0 MPI essence;1.0 TSI essence;1.5 TSI essence;2.0 TSI GTI;1.6 TDI diesel
+vw_golf|Volkswagen|Golf|2012–2026|Compacte|1.0 TSI essence;1.4/1.5 TSI essence;2.0 TSI GTI/R;1.6/2.0 TDI diesel;1.4/1.5 eHybrid PHEV
+vw_passat|Volkswagen|Passat|2014–2026|Berline|1.5 TSI essence;2.0 TSI essence;2.0 TDI diesel;1.4/1.5 eHybrid PHEV
+vw_tiguan|Volkswagen|Tiguan|2016–2026|SUV|1.4/1.5 TSI essence;2.0 TSI essence;2.0 TDI diesel;1.4/1.5 eHybrid PHEV
+volvo_xc40|Volvo|XC40|2017–2026|SUV|1.5/2.0 essence;2.0 diesel;B3/B4/B5 mild-hybrid;Recharge PHEV;Recharge électrique
+volvo_xc60|Volvo|XC60|2017–2026|SUV|2.0 B4/B5 essence MHEV;2.0 diesel MHEV;T6/T8 Recharge PHEV
+volvo_v60|Volvo|V60|2018–2026|Break|2.0 essence MHEV;2.0 diesel MHEV;T6/T8 Recharge PHEV
+mini_cooper|MINI|Cooper|2014–2026|Citadine|1.5 TwinPower Turbo essence;2.0 TwinPower Turbo essence;Cooper SE électrique
+mini_countryman|MINI|Countryman|2017–2026|SUV|1.5 Turbo essence;2.0 Turbo essence;2.0 diesel;SE ALL4 PHEV;Countryman Electric
+isuzu_dmax|Isuzu|D-Max|2012–2026|Pick-up|1.9 Blue Power diesel;2.5 diesel;3.0 diesel
+chery_tiggo7|Chery|Tiggo 7|2016–2026|SUV|1.5 Turbo essence;1.6 TGDI essence;1.5 PHEV rechargeable
+chery_tiggo8|Chery|Tiggo 8|2018–2026|SUV familial|1.5 Turbo essence;1.6 TGDI essence;2.0 TGDI essence;PHEV rechargeable
+greatwall_h6|GWM|Haval H6|2011–2026|SUV|1.5 Turbo essence;2.0 Turbo essence;1.5 HEV hybride;PHEV rechargeable
+kgm_tivoli|KGM|Tivoli|2015–2026|SUV urbain|1.2 Turbo essence;1.5 Turbo essence;1.6 diesel
+smart_1|smart|#1|2022–2026|SUV électrique|Propulsion électrique;AWD Brabus électrique

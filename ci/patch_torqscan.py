@@ -779,7 +779,7 @@ selector_file = project / "lib/screens/vehicle_selector_screen.dart"
 selector_text = selector_file.read_text()
 # Locate the GridView-backed Expanded widget independently of Dart formatter layout.
 selector_match = re.search(
-    r"\\bExpanded\\s*\\(\\s*child\\s*:\\s*GridView\\.builder\\s*\\(",
+    r"\bExpanded\s*\(\s*child\s*:\s*GridView\.builder\s*\(",
     selector_text,
 )
 if selector_match is None:
@@ -794,7 +794,7 @@ for index in range(selector_start, len(selector_text)):
     if in_string:
         if escaped:
             escaped = False
-        elif char == "\\\\":
+        elif char == "\\":
             escaped = True
         elif char == in_string:
             in_string = None

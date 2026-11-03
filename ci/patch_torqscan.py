@@ -2283,7 +2283,7 @@ void main() {
     await tester.tap(find.text('Peugeot 208'));
     await tester.pumpAndSettle();
     expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-    expect(find.textContaining('المحرك'), findsOneWidget);
+    expect(find.text('المحرك — Peugeot 208'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -2343,7 +2343,7 @@ void main() {
     await tester.tap(find.text('Peugeot 208').last);
     await tester.pumpAndSettle();
     expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-    expect(find.textContaining('المحرك'), findsOneWidget);
+    expect(find.text('المحرك — Peugeot 208'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

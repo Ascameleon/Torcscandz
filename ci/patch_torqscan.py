@@ -1917,7 +1917,16 @@ class VehicleCatalog {
   static VehicleModel _v(String id, String brand, String model, String year,
       String body, String engines) => VehicleModel(
     id:id, brand:brand, model:model, year:year, body:body,
-    image:'assets/vehicles/generic_obd.png', engines:engines.split(';'));
+    image:(_images[id] ?? 'assets/vehicles/generic_obd.png'), engines:engines.split(';'));
+  static const Map<String, String> _images = {
+    'peugeot_208': 'assets/vehicles/peugeot_208.png',
+    'renault_clio': 'assets/vehicles/renault_clio.png',
+    'dacia_sandero': 'assets/vehicles/dacia_sandero.png',
+    'vw_golf': 'assets/vehicles/vw_golf.png',
+    'toyota_corolla': 'assets/vehicles/toyota_corolla.png',
+    'mercedes_c': 'assets/vehicles/mercedes_c.png',
+    'hyundai_tucson': 'assets/vehicles/hyundai_tucson.png',
+  };
   // Engine labels are broad families; verify year, market and VIN before repairs.
   static final List<VehicleModel> vehicles = [
 """ + "".join(
@@ -2116,7 +2125,7 @@ changes.append(str(selector.relative_to(project)))
 
 home = project / "lib" / "screens" / "home_screen.dart"
 home_text = home.read_text()
-needle = "Text('\${vehicle.year} • \${vehicle.body}', style: Theme.of(context).textTheme.bodySmall)"
+needle = "Text('${vehicle.year} • ${vehicle.body}', style: Theme.of(context).textTheme.bodySmall)"
 replacement = needle + ",\n              if (VehicleCatalog.engineLabelFor(vehicle.id, context.watch<AppSettings>().selectedEngineId) case final engine?) ...[\n                const SizedBox(height: 4),\n                Text(engine, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),\n              ]"
 if needle in home_text:
     home_text = home_text.replace(needle, replacement, 1)
@@ -2173,9 +2182,9 @@ if __import__('shutil').which('dart'):
 
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()
-pubspec_text, version_count = re.subn(r"(?m)^version: 1\.4\.1\+25$", "version: 1.4.9+33", pubspec_text, count=1)
+pubspec_text, version_count = re.subn(r"(?m)^version:\s*\S+\s*$", "version: 1.4.9+33", pubspec_text, count=1)
 if version_count != 1:
-    raise RuntimeError("Expected source baseline version 1.4.1+25 before setting 1.4.9+33")
+    raise RuntimeError("Could not replace the single pubspec version field with 1.4.9+33")
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 

@@ -242,33 +242,6 @@ home_text, mode_selector_count = re.subn(
 if mode_selector_count != 1:
     raise RuntimeError(f"Responsive connection-mode selector anchor mismatch: {mode_selector_count}")
 
-home_import = "import 'vehicle_selector_screen.dart';"
-if home_text.count(home_import) != 1:
-    raise RuntimeError("Home screen vehicle selector import anchor changed.")
-home_text = home_text.replace(
-    home_import,
-    home_import + "\nimport '../widgets/connection_mode_selector.dart';",
-    1,
-)
-home_text, mode_selector_count = re.subn(
-    r"(?m)^          SegmentedButton<String>\(\n.*?^          \),\n(?=          const SizedBox\(height: 12\),\n          OutlinedButton\.icon\()",
-    """          ConnectionModeSelector(
-            selected: _connectionMode,
-            bluetoothLabel: tr(context, 'bluetooth'),
-            wifiLabel: tr(context, 'wifi_tcp'),
-            onChanged: (mode) {
-              setState(() => _connectionMode = mode);
-              if (mode == 'bluetooth') _initBluetooth();
-            },
-          ),
-""",
-    home_text,
-    count=1,
-    flags=re.S,
-)
-if mode_selector_count != 1:
-    raise RuntimeError(f"Responsive connection-mode selector anchor mismatch: {mode_selector_count}")
-
 home.write_text(home_text)
 changes.append(str(home.relative_to(project)))
 
@@ -1868,7 +1841,7 @@ pubspec_text, version_count = re.subn(
 )
 if version_count != 1:
     raise RuntimeError("Expected exactly one intermediate version 1.4.1+25 before setting 1.4.7+31")
-if "version: 1.4.5+29" not in pubspec_text:
+if "version: 1.4.7+31" not in pubspec_text:
     raise RuntimeError("Could not set the responsive release version 1.4.5+29")
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))

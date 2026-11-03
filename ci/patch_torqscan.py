@@ -1188,7 +1188,15 @@ if __import__('shutil').which('dart'):
 
 # Increment the Android package version for this responsive-layout release.
 pubspec = project / "pubspec.yaml"
-pubspec_text = pubspec.read_text().replace("version: 1.4.1+25", "version: 1.4.4+28")
+pubspec_text = pubspec.read_text()
+pubspec_text, version_count = re.subn(
+    r"(?m)^version: 1\\.4\\.1\\+25$",
+    "version: 1.4.5+29",
+    pubspec_text,
+    count=1,
+)
+if version_count != 1:
+    raise RuntimeError("Expected exactly one intermediate version 1.4.1+25 before setting 1.4.5+29")
 if "version: 1.4.5+29" not in pubspec_text:
     raise RuntimeError("Could not set the responsive release version 1.4.5+29")
 pubspec.write_text(pubspec_text)

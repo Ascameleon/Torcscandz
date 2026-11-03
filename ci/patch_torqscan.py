@@ -760,20 +760,23 @@ if old_builder not in main_text:
 main_file.write_text(main_text.replace(old_builder, new_builder))
 changes.append(str(main_file.relative_to(project)))
 
-# Adapt the vehicle selector to compact phones and prevent long model labels
-# from forcing grid cards or their action controls outside the viewport.
-selector_file = project / "lib/screens/vehicle_selector_screen.dart"
-selector_text = selector_file.read_text()
-# Locate the GridView and its enclosing Expanded widget without assuming
-# that Dart's formatter preserves a particular whitespace layout.
-grid_match = re.search(r"GridView\s*\.\s*builder\s*\(", selector_text)
-if grid_match is None:
-    raise RuntimeError("Vehicle selector GridView.builder widget was not found")
-expanded_matches = list(
-   # Adapt the actual three-step vehicle selector (ListView, not a vehicle grid)
+# Adapt the actual three-step vehicle selector (ListView, not a vehicle grid)
 # so brand chips, model names, generation details and action labels stay bounded.
 selector_file = project / "lib/screens/vehicle_selector_screen.dart"
 selector_text = selector_file.read_text()
+
+selector_text = selector_text.replace(
+    "    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),",
+    """    Expanded(
+      child: Text(
+        title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
+    ),""",
+    1,
+)
 
 selector_text = replace_between(
     selector_text,
@@ -999,5 +1002,18 @@ if __import__('shutil').which('dart'):
         cwd=project,
     )
 
-json").write_text(json.dumps(report, indent=2) + "\n")
+# Increment the Android package version for this responsive-layout release.
+pubspec = project / "pubspec.yaml"
+pubspec_text = pubspec.read_text().replace("version: 1.4.1+25", "version: 1.4.4+28")
+if "version: 1.4.4+28" not in pubspec_text:
+    raise RuntimeError("Could not set the responsive release version 1.4.4+28")
+pubspec.write_text(pubspec_text)
+changes.append(str(pubspec.relative_to(project)))
+
+report = {
+    "patch": "torqscan-responsive-selector-v2",
+    "files": {name: sha256(project / name) for name in changes},
+    "socket_destroyed_references": 0,
+}
+(project / "torqscan-patch-report.json").write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps({"status": "patched", "files": changes, "report": report}, indent=2))

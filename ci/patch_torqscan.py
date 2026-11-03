@@ -777,17 +777,39 @@ changes.append(str(main_file.relative_to(project)))
 # from forcing grid cards or their action controls outside the viewport.
 selector_file = project / "lib/screens/vehicle_selector_screen.dart"
 selector_text = selector_file.read_text()
-selector_start = selector_text.find("        Expanded(")
-# Flutter formatting runs before this patch and expands the original one-line
-# Expanded/GridView into a multiline widget. Replace the Expanded expression
-# itself, not the enclosing Column children terminator (whose indentation varies).
-selector_end_marker = "\n        ),"
-selector_end = selector_text.find(selector_end_marker, selector_start)
-if selector_start < 0 or selector_end < 0:
-    raise RuntimeError(
-        "Expected formatted vehicle selector Expanded widget was not found"
-    )
-selector_end += len(selector_end_marker)
+# Locate the GridView-backed Expanded widget independently of Dart formatter layout.
+selector_match = re.search(
+    r"\\bExpanded\\s*\\(\\s*child\\s*:\\s*GridView\\.builder\\s*\\(",
+    selector_text,
+)
+if selector_match is None:
+    raise RuntimeError("Vehicle selector GridView-backed Expanded widget was not found")
+selector_start = selector_match.start()
+open_parens = 0
+in_string = None
+escaped = False
+selector_end = None
+for index in range(selector_start, len(selector_text)):
+    char = selector_text[index]
+    if in_string:
+        if escaped:
+            escaped = False
+        elif char == "\\\\":
+            escaped = True
+        elif char == in_string:
+            in_string = None
+        continue
+    if char in ("'", '"'):
+        in_string = char
+    elif char == "(":
+        open_parens += 1
+    elif char == ")":
+        open_parens -= 1
+        if open_parens == 0:
+            selector_end = index + 1
+            break
+if selector_end is None:
+    raise RuntimeError("Vehicle selector Expanded widget has unbalanced parentheses")
 responsive_grid = """        Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {

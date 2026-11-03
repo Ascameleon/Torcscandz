@@ -1449,6 +1449,10 @@ void main() {
     expect(settings.language, 'en');
 
     await tester.ensureVisible(refreshField);
+    await tester.pumpAndSettle();
+    final refreshRect = tester.getRect(refreshField);
+    expect(refreshRect.top, greaterThanOrEqualTo(0));
+    expect(refreshRect.bottom, lessThanOrEqualTo(tester.view.physicalSize.height));
     await tester.tap(refreshField);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Economy').last);
@@ -1481,6 +1485,10 @@ void main() {
 
     final refreshField = find.byType(DropdownButtonFormField<int>);
     await tester.ensureVisible(refreshField);
+    await tester.pumpAndSettle();
+    final refreshRect = tester.getRect(refreshField);
+    expect(refreshRect.top, greaterThanOrEqualTo(0));
+    expect(refreshRect.bottom, lessThanOrEqualTo(tester.view.physicalSize.height));
     await tester.tap(refreshField);
     await tester.pumpAndSettle();
     await tester.tap(find.text('اقتصادي').last);

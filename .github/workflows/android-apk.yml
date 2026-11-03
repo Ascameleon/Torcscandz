@@ -253,6 +253,22 @@ jobs:
           chmod +x android/gradlew
           cat "$wrapper"
 
+      - name: Preserve extracted Flutter source for audited customization
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR/.."
+          zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$(basename "$PROJECT_DIR")"
+      - name: Upload extracted source snapshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: torqscan-flutter-source-snapshot
+          path: ${{ github.workspace }}/torqscan-flutter-source.zip
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get

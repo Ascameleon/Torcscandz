@@ -1905,8 +1905,15 @@ for line in catalog_path.read_text(encoding="utf-8").splitlines():
     if len(parts) != 6:
         raise RuntimeError("Malformed vehicle catalogue row: " + line)
     catalog_rows.append(parts)
-if len(catalog_rows) < 90:
-    raise RuntimeError("Vehicle catalogue unexpectedly contains fewer than 90 models")
+if len(catalog_rows) < 118:
+    raise RuntimeError("Vehicle catalogue unexpectedly contains fewer than 118 entries")
+catalog_ids = [row[0] for row in catalog_rows]
+if len(set(catalog_ids)) != len(catalog_ids):
+    raise RuntimeError("Vehicle catalogue contains duplicate IDs")
+if not any(row[0] == "generic_obd" for row in catalog_rows):
+    raise RuntimeError("Generic OBD-II fallback is missing")
+if any(not row[5].strip() or any(not item.strip() for item in row[5].split(";")) for row in catalog_rows):
+    raise RuntimeError("Vehicle catalogue contains an empty engine-family entry")
 vehicle_source = """class VehicleModel {
   final String id, brand, model, year, body, image;
   final List<String> engines;
@@ -1952,6 +1959,33 @@ changes.append(str(vehicle_file.relative_to(project)))
 
 settings_file = project / "lib" / "core" / "app_settings.dart"
 settings_text = settings_file.read_text()
+catalog_locales = [
+    (
+        "      'choose_model': 'Choisissez la marque et le modèle à scanner', 'brand': 'Marque', 'model': 'Modèle',",
+        "      'choose_model': 'Choisissez la marque et le modèle à scanner', 'brand': 'Marque', 'model': 'Modèle',\n"
+        "      'catalog_all_brands': 'Toutes', 'catalog_models': 'modèles', 'catalog_engine_count': 'motorisations',\n"
+        "      'catalog_search_hint': 'Marque, modèle, moteur, carburant...', 'catalog_empty': 'Aucun modèle correspondant',\n"
+        "      'catalog_engine': 'Motorisation', 'catalog_disclaimer': 'Familles indicatives : vérifiez l’année, le marché et le VIN avant toute intervention.',"
+    ),
+    (
+        "      'choose_model': 'Choose the make and model to scan', 'brand': 'Make', 'model': 'Model',",
+        "      'choose_model': 'Choose the make and model to scan', 'brand': 'Make', 'model': 'Model',\n"
+        "      'catalog_all_brands': 'All makes', 'catalog_models': 'models', 'catalog_engine_count': 'engine options',\n"
+        "      'catalog_search_hint': 'Make, model, engine, fuel type...', 'catalog_empty': 'No matching model',\n"
+        "      'catalog_engine': 'Engine', 'catalog_disclaimer': 'Indicative engine families: verify model year, market and VIN before servicing.',"
+    ),
+    (
+        "      'choose_model': 'اختر العلامة والطراز للفحص', 'brand': 'العلامة', 'model': 'الطراز',",
+        "      'choose_model': 'اختر العلامة والطراز للفحص', 'brand': 'العلامة', 'model': 'الطراز',\n"
+        "      'catalog_all_brands': 'كل العلامات', 'catalog_models': 'طرازاً', 'catalog_engine_count': 'خيارات المحرك',\n"
+        "      'catalog_search_hint': 'ابحث عن العلامة أو الطراز أو المحرك أو الوقود...', 'catalog_empty': 'لا توجد نتائج مطابقة',\n"
+        "      'catalog_engine': 'المحرك', 'catalog_disclaimer': 'المحركات إرشادية: تحقق من سنة الصنع والسوق ورقم VIN قبل الصيانة.',"
+    ),
+]
+for source_text, replacement_text in catalog_locales:
+    if source_text not in settings_text:
+        raise RuntimeError("Vehicle catalogue localization anchor missing: " + source_text[:70])
+    settings_text = settings_text.replace(source_text, replacement_text, 1)
 if "String? selectedEngineId;" not in settings_text:
     settings_text = settings_text.replace("  String? selectedVehicleId;\n",
         "  String? selectedVehicleId;\n  String? selectedEngineId;\n", 1)
@@ -1993,10 +2027,11 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brands = ['Toutes', ...VehicleCatalog.brands];
+    final allBrands = tr(context, 'catalog_all_brands');
+    final brands = [allBrands, ...VehicleCatalog.brands];
     final q = _query.trim().toLowerCase();
     final list = VehicleCatalog.vehicles.where((v) {
-      final matchesBrand = _brand == 'Toutes' || v.brand == _brand;
+      final matchesBrand = _brand == allBrands || v.brand == _brand;
       final searchable = (v.brand + ' ' + v.model + ' ' + v.year + ' ' + v.engines.join(' ')).toLowerCase();
       return matchesBrand && searchable.contains(q);
     }).toList();
@@ -2005,16 +2040,16 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
         title: Text(tr(context, 'select_vehicle')),
         actions: [Padding(
           padding: const EdgeInsetsDirectional.only(end: 16),
-          child: Center(child: Text((VehicleCatalog.vehicles.length - 1).toString() + ' modèles')),
+          child: Center(child: Text((VehicleCatalog.vehicles.length - 1).toString() + ' ' + tr(context, 'catalog_models'))),
         )],
       ),
       body: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: TextField(
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Marque, modèle, moteur, carburant...',
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: tr(context, 'catalog_search_hint'),
               border: OutlineInputBorder(),
             ),
             onChanged: (v) => setState(() => _query = v),
@@ -2032,7 +2067,7 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
           ),
         )),
         Expanded(child: list.isEmpty
-          ? const Center(child: Text('Aucun modèle correspondant'))
+          ? Center(child: Text(tr(context, 'catalog_empty')))
           : GridView.builder(
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -2051,7 +2086,7 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
           if (_selected != null) ...[
             Align(
               alignment: AlignmentDirectional.centerStart,
-              child: Text('Motorisation — ' + _selected!.brand + ' ' + _selected!.model,
+              child: Text(tr(context, 'catalog_engine') + ' — ' + _selected!.brand + ' ' + _selected!.model,
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
             const SizedBox(height: 6),
@@ -2069,6 +2104,11 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
                 child: Text(engine, maxLines: 2, overflow: TextOverflow.ellipsis),
               )).toList(),
               onChanged: (engine) => setState(() => _selectedEngine = engine),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(tr(context, 'catalog_disclaimer'), maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall),
             ),
             const SizedBox(height: 8),
           ],
@@ -2112,7 +2152,7 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
               Text(v.year + ' • ' + v.body, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 3),
-              Text(v.engines.length.toString() + ' motorisations', style: Theme.of(context).textTheme.labelSmall),
+              Text(v.engines.length.toString() + ' ' + tr(context, 'catalog_engine_count'), style: Theme.of(context).textTheme.labelSmall),
             ]),
           ),
         ]),
@@ -2177,6 +2217,69 @@ void main() {
 """)
 changes.append(str(catalog_test.relative_to(project)))
 
+selector_test = project / "test" / "vehicle_selector_responsive_test.dart"
+selector_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/screens/vehicle_selector_screen.dart';
+
+void main() {
+  Future<void> pumpSelector(WidgetTester tester, {required double width, bool rtl = false}) async {
+    tester.view.physicalSize = Size(width, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settings = AppSettings();
+    if (rtl) settings.setLanguage('ar');
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppSettings>.value(
+        value: settings,
+        child: MaterialApp(
+          home: Builder(builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.25)),
+            child: Directionality(
+              textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
+              child: const VehicleSelectorScreen(),
+            ),
+          )),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  for (final width in [320.0, 360.0]) {
+    testWidgets('vehicle selector supports search and engine choice at ' + width.toString() + ' px', (tester) async {
+      await pumpSelector(tester, width: width);
+      expect(find.text('118 modèles'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Peugeot 208');
+      await tester.pumpAndSettle();
+      expect(find.text('Peugeot 208'), findsOneWidget);
+      await tester.tap(find.text('Peugeot 208'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      expect(find.text('1.5 BlueHDi diesel'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('vehicle selector keeps its controls usable in Arabic RTL', (tester) async {
+    await pumpSelector(tester, width: 320, rtl: true);
+    await tester.enterText(find.byType(TextField), 'Peugeot 208');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Peugeot 208'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    expect(find.textContaining('المحرك'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+""")
+changes.append(str(selector_test.relative_to(project)))
+
 if __import__('shutil').which('dart'):
     subprocess.run(["dart","format",str(vehicle_file),str(selector),str(settings_file),str(home),str(catalog_test)],check=True,cwd=project)
 
@@ -2190,8 +2293,11 @@ changes.append(str(pubspec.relative_to(project)))
 
 
 report = {
-    "patch": "torqscan-global-vehicle-engine-catalog-v1",
+    "patch": "torqscan-global-vehicle-engine-catalog-v2",
     "files": {name: sha256(project / name) for name in changes},
+    "catalog_data_sha256": sha256(catalog_path),
+    "catalog_model_entries": len(catalog_rows) - 1,
+    "catalog_manufacturers": len({row[1] for row in catalog_rows if row[0] != "generic_obd"}),
     "socket_destroyed_references": 0,
     "original_logo_sha256": original_logo_sha256,
 }

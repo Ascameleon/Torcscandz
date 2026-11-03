@@ -6,6 +6,7 @@ import hashlib
 import json
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 if len(sys.argv) != 2:

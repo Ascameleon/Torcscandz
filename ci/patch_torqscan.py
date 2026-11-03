@@ -358,7 +358,7 @@ bluetooth.write_text(bt)
 changes.append(str(bluetooth.relative_to(project)))
 
 
-# Apply the approved Torque ScanDZ product identity, dark automotive theme and launcher icon.
+# Apply Torque ScanDZ identity, light default theme and responsive dashboard fixes.
 main_file = project / "lib/main.dart"
 main_file.write_text("""import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -570,8 +570,8 @@ changes.append(str(drawable.relative_to(project)))
 # Verify product identity and ensure the existing splash-screen resources were not altered.
 if 'android:label="Torque ScanDZ"' not in manifest_text:
     raise RuntimeError("Launcher label was not updated.")
-if "ThemeMode.dark" not in settings_text:
-    raise RuntimeError("Dark automotive theme is not the default.")
+if "ThemeMode.light" not in settings_text:
+    raise RuntimeError("Light theme is not the default.")
 if "Dz Torqscan" in main_file.read_text() or "Dz Torqscan" in settings_text:
     raise RuntimeError("Legacy product name remains in app identity files.")
 

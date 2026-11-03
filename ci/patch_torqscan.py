@@ -777,14 +777,17 @@ changes.append(str(main_file.relative_to(project)))
 # from forcing grid cards or their action controls outside the viewport.
 selector_file = project / "lib/screens/vehicle_selector_screen.dart"
 selector_text = selector_file.read_text()
-# Locate the GridView-backed Expanded widget independently of Dart formatter layout.
-selector_match = re.search(
-    r"\bExpanded\s*\(\s*child\s*:\s*GridView\.builder\s*\(",
-    selector_text,
+# Locate the GridView and its enclosing Expanded widget without assuming
+# that Dart's formatter preserves a particular whitespace layout.
+grid_match = re.search(r"GridView\s*\.\s*builder\s*\(", selector_text)
+if grid_match is None:
+    raise RuntimeError("Vehicle selector GridView.builder widget was not found")
+expanded_matches = list(
+    re.finditer(r"\bExpanded\s*\(", selector_text[:grid_match.start()])
 )
-if selector_match is None:
-    raise RuntimeError("Vehicle selector GridView-backed Expanded widget was not found")
-selector_start = selector_match.start()
+if not expanded_matches:
+    raise RuntimeError("Vehicle selector GridView is not wrapped in Expanded")
+selector_start = expanded_matches[-1].start()
 open_parens = 0
 in_string = None
 escaped = False

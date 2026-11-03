@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -776,29 +777,55 @@ changes.append(str(main_file.relative_to(project)))
 # from forcing grid cards or their action controls outside the viewport.
 selector_file = project / "lib/screens/vehicle_selector_screen.dart"
 selector_text = selector_file.read_text()
-if "        Expanded(child: GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .9), itemCount: list.length, itemBuilder: (_, i) => _vehicleCard(context, list[i])))," not in selector_text:
-    raise RuntimeError("Expected vehicle selector grid was not found")
-selector_text = selector_text.replace("        Expanded(child: GridView.builder(padding: const EdgeInsets.all(16), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .9), itemCount: list.length, itemBuilder: (_, i) => _vehicleCard(context, list[i]))),", "        Expanded(\n          child: LayoutBuilder(\n            builder: (context, constraints) {\n              final columns = constraints.maxWidth < 340 ? 1 : 2;\n              return GridView.builder(\n                padding: const EdgeInsets.all(16),\n                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(\n                  crossAxisCount: columns,\n                  crossAxisSpacing: 12,\n                  mainAxisSpacing: 12,\n                  childAspectRatio: columns == 1 ? 2.05 : 0.9,\n                ),\n                itemCount: list.length,\n                itemBuilder: (_, i) => _vehicleCard(context, list[i]),\n              );\n            },\n          ),\n        ),")
-selector_text = selector_text.replace(
-    """Text('${v.brand} ${v.model}', style: const TextStyle(fontWeight: FontWeight.bold))""",
+selector_start = selector_text.find("        Expanded(")
+selector_end = selector_text.find("\n      ]),", selector_start)
+if selector_start < 0 or selector_end < 0:
+    raise RuntimeError("Expected vehicle selector grid bounds were not found")
+responsive_grid = """        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth < 340 ? 1 : 2;
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: columns == 1 ? 2.05 : 0.9,
+                ),
+                itemCount: list.length,
+                itemBuilder: (_, i) => _vehicleCard(context, list[i]),
+              );
+            },
+          ),
+        ),"""
+selector_text = selector_text[:selector_start] + responsive_grid + selector_text[selector_end:]
+selector_text, title_count = re.subn(
+    r"Text\('\$\{v\.brand\} \$\{v\.model\}',\s*style:\s*const TextStyle\(fontWeight:\s*FontWeight\.bold\)\)",
     """Text(
               '${v.brand} ${v.model}',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.bold),
             )""",
+    selector_text,
+    count=1,
 )
-selector_text = selector_text.replace(
-    """Text('${v.year} • ${v.body}', style: Theme.of(context).textTheme.bodySmall)""",
+selector_text, detail_count = re.subn(
+    r"Text\('\$\{v\.year\} • \$\{v\.body\}',\s*style:\s*Theme\.of\(context\)\.textTheme\.bodySmall\)",
     """Text(
               '${v.year} • ${v.body}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall,
             )""",
+    selector_text,
+    count=1,
 )
 if "constraints.maxWidth < 340" not in selector_text:
     raise RuntimeError("Responsive vehicle selector breakpoint was not applied")
+if title_count != 1 or detail_count != 1:
+    raise RuntimeError(f"Vehicle selector text guards missing: title={title_count}, details={detail_count}")
 selector_file.write_text(selector_text)
 changes.append(str(selector_file.relative_to(project)))
 

@@ -2265,8 +2265,8 @@ void main() {
       expect(find.text('243 modèles'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Peugeot 208');
       await tester.pumpAndSettle();
-      expect(find.text('Peugeot 208'), findsOneWidget);
-      await tester.tap(find.text('Peugeot 208'));
+      expect(find.text('Peugeot 208').last, findsOneWidget);
+      await tester.tap(find.text('Peugeot 208').last);
       await tester.pumpAndSettle();
       expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
       await tester.tap(find.byType(DropdownButtonFormField<String>));
@@ -2290,8 +2290,68 @@ void main() {
 """)
 changes.append(str(selector_test.relative_to(project)))
 
+responsive_test = project / "test" / "responsive_vehicle_selector_test.dart"
+responsive_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/screens/vehicle_selector_screen.dart';
+
+Future<void> pumpSelector(WidgetTester tester, {required Size size, required String language}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  final settings = AppSettings()..language = language;
+  await tester.pumpWidget(ChangeNotifierProvider<AppSettings>.value(
+    value: settings,
+    child: MaterialApp(
+      home: Builder(builder: (context) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.3)),
+        child: Directionality(
+          textDirection: language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+          child: const VehicleSelectorScreen(),
+        ),
+      )),
+    ),
+  ));
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+}
+
+void main() {
+  testWidgets('320px French catalogue search and engine choice stay reachable', (tester) async {
+    await pumpSelector(tester, size: const Size(320, 720), language: 'fr');
+    await tester.enterText(find.byType(TextField), 'Mercedes-Benz Classe C');
+    await tester.pumpAndSettle();
+    final model = find.text('Mercedes-Benz Classe C').last;
+    expect(model, findsOneWidget);
+    await tester.tap(model);
+    await tester.pumpAndSettle();
+    final engine = find.byType(DropdownButtonFormField<String>);
+    expect(engine, findsOneWidget);
+    await tester.tap(engine);
+    await tester.pumpAndSettle();
+    expect(find.text('C 220 d/300 d diesel'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('360px Arabic RTL catalogue search and engine choice stay reachable', (tester) async {
+    await pumpSelector(tester, size: const Size(360, 780), language: 'ar');
+    await tester.enterText(find.byType(TextField), 'Peugeot 208');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Peugeot 208').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    expect(find.textContaining('المحرك'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+""")
+changes.append(str(responsive_test.relative_to(project)))
+
 if __import__('shutil').which('dart'):
-    subprocess.run(["dart","format",str(vehicle_file),str(selector),str(settings_file),str(home),str(catalog_test),str(selector_test)],check=True,cwd=project)
+    subprocess.run(["dart","format",str(vehicle_file),str(selector),str(settings_file),str(home),str(catalog_test),str(selector_test),str(responsive_test)],check=True,cwd=project)
 
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()

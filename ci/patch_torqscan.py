@@ -868,23 +868,19 @@ selector_text = selector_text.replace(
 )
 selector_text = selector_text.replace(
     "            label: const Text('Je ne trouve pas mon véhicule — OBD-II / EOBD'),",
-    """            label: const Flexible(
-              child: Text(
-                'Je ne trouve pas mon véhicule — OBD-II / EOBD',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+    """            label: const Text(
+              'Je ne trouve pas mon véhicule — OBD-II / EOBD',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),""",
     1,
 )
 selector_text = selector_text.replace(
     "            label: const Text('Valider ce véhicule'),",
-    """            label: const Flexible(
-              child: Text(
-                'Valider ce véhicule',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+    """            label: const Text(
+              'Valider ce véhicule',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),""",
     1,
 )

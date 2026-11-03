@@ -847,6 +847,22 @@ dashboard_text = dashboard_text.replace(
             ),
 """,
 )
+grid_anchor = "crossAxisCount: 2,"
+if dashboard_text.count(grid_anchor) != 1:
+    raise RuntimeError("Dashboard PID grid column anchor changed.")
+dashboard_text = dashboard_text.replace(
+    grid_anchor,
+    "crossAxisCount: MediaQuery.sizeOf(context).width < 380 ? 1 : 2,",
+    1,
+)
+ratio_anchor = "childAspectRatio: 1.12,"
+if dashboard_text.count(ratio_anchor) != 1:
+    raise RuntimeError("Dashboard PID grid aspect-ratio anchor changed.")
+dashboard_text = dashboard_text.replace(
+    ratio_anchor,
+    "childAspectRatio: MediaQuery.sizeOf(context).width < 380 ? 1.8 : 1.12,",
+    1,
+)
 dashboard_file.write_text(dashboard_text)
 changes.append(str(dashboard_file.relative_to(project)))
 
@@ -1037,6 +1053,38 @@ void main() {
     expect(find.byType(GridView), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('compact dashboard uses one readable PID column', (
+    tester,
+  ) async {
+    await pumpDashboard(
+      tester,
+      size: const Size(320, 720),
+      language: 'fr',
+    );
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    final delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 1);
+    expect(delegate.childAspectRatio, 1.8);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide dashboard retains the two-column PID layout', (
+    tester,
+  ) async {
+    await pumpDashboard(
+      tester,
+      size: const Size(480, 900),
+      language: 'en',
+    );
+    final grid = tester.widget<GridView>(find.byType(GridView));
+    final delegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(delegate.crossAxisCount, 2);
+    expect(delegate.childAspectRatio, 1.12);
+    expect(tester.takeException(), isNull);
+  });
+
 }
 """)
 changes.append(str(dashboard_test.relative_to(project)))
@@ -1835,19 +1883,19 @@ pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()
 pubspec_text, version_count = re.subn(
     r"(?m)^version: 1\.4\.1\+25$",
-    "version: 1.4.7+31",
+    "version: 1.4.8+32",
     pubspec_text,
     count=1,
 )
 if version_count != 1:
     raise RuntimeError("Expected exactly one intermediate version 1.4.1+25 before setting 1.4.7+31")
-if "version: 1.4.7+31" not in pubspec_text:
-    raise RuntimeError("Could not set the responsive release version 1.4.5+29")
+if "version: 1.4.8+32" not in pubspec_text:
+    raise RuntimeError("Could not set dashboard compact-grid release version 1.4.8+32")
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 
 report = {
-    "patch": "torqscan-mobile-connection-mode-responsive-v1",
+    "patch": "torqscan-dashboard-compact-grid-v1",
     "files": {name: sha256(project / name) for name in changes},
     "socket_destroyed_references": 0,
     "original_logo_sha256": original_logo_sha256,

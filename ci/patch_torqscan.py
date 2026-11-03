@@ -1157,6 +1157,365 @@ if __import__('shutil').which('dart'):
         cwd=project,
     )
 
+# Make all settings selectors adapt to narrow phones and enlarged accessibility text.
+# Keep segmented controls on wider screens; use full-width dropdowns on compact screens.
+settings_screen = project / "lib/screens/settings_screen.dart"
+settings_screen.write_text("""import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../core/app_settings.dart';
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AppSettings>();
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(context, 'advanced_title'))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          _section(context, tr(context, 'language'), [
+            _adaptiveSelector<String>(
+              context: context,
+              selected: settings.language,
+              segments: [
+                const ButtonSegment(
+                  value: 'fr',
+                  label: Text('Français'),
+                  icon: Icon(Icons.language),
+                ),
+                const ButtonSegment(value: 'en', label: Text('English')),
+                const ButtonSegment(value: 'ar', label: Text('العربية')),
+              ],
+              items: const [
+                DropdownMenuItem(value: 'fr', child: Text('Français')),
+                DropdownMenuItem(value: 'en', child: Text('English')),
+                DropdownMenuItem(value: 'ar', child: Text('العربية')),
+              ],
+              onChanged: settings.setLanguage,
+            ),
+          ]),
+          const SizedBox(height: 14),
+          _section(context, tr(context, 'theme'), [
+            _adaptiveSelector<ThemeMode>(
+              context: context,
+              selected: settings.themeMode,
+              segments: [
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  label: Text(tr(context, 'light')),
+                  icon: const Icon(Icons.light_mode),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  label: Text(tr(context, 'dark')),
+                  icon: const Icon(Icons.dark_mode),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  label: Text(tr(context, 'system')),
+                  icon: const Icon(Icons.brightness_auto),
+                ),
+              ],
+              items: [
+                DropdownMenuItem(
+                  value: ThemeMode.light,
+                  child: Text(tr(context, 'light')),
+                ),
+                DropdownMenuItem(
+                  value: ThemeMode.dark,
+                  child: Text(tr(context, 'dark')),
+                ),
+                DropdownMenuItem(
+                  value: ThemeMode.system,
+                  child: Text(tr(context, 'system')),
+                ),
+              ],
+              onChanged: settings.setTheme,
+            ),
+          ]),
+          const SizedBox(height: 14),
+          _section(context, tr(context, 'advanced_title'), [
+            SwitchListTile.adaptive(
+              title: Text(tr(context, 'live_data')),
+              value: settings.scanOptions.liveData,
+              onChanged: (value) => settings.setScanOptions(
+                settings.scanOptions.copyWith(liveData: value),
+              ),
+            ),
+            SwitchListTile.adaptive(
+              title: Text(tr(context, 'confirmed_dtc')),
+              value: settings.scanOptions.confirmedDtc,
+              onChanged: (value) => settings.setScanOptions(
+                settings.scanOptions.copyWith(confirmedDtc: value),
+              ),
+            ),
+            SwitchListTile.adaptive(
+              title: Text(tr(context, 'pending_dtc')),
+              value: settings.scanOptions.pendingDtc,
+              onChanged: (value) => settings.setScanOptions(
+                settings.scanOptions.copyWith(pendingDtc: value),
+              ),
+            ),
+            SwitchListTile.adaptive(
+              title: Text(tr(context, 'full_pid')),
+              subtitle: Text(tr(context, 'full_pid_desc')),
+              value: settings.scanOptions.fullPidScan,
+              onChanged: (value) => settings.setScanOptions(
+                settings.scanOptions.copyWith(fullPidScan: value),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(context, 'refresh_rate'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            _adaptiveSelector<int>(
+              context: context,
+              selected: settings.scanOptions.liveRefreshMs,
+              segments: [
+                ButtonSegment(value: 75, label: Text(tr(context, 'fast'))),
+                ButtonSegment(
+                  value: 150,
+                  label: Text(tr(context, 'balanced')),
+                ),
+                ButtonSegment(value: 300, label: Text(tr(context, 'safe'))),
+              ],
+              items: [
+                DropdownMenuItem(
+                  value: 75,
+                  child: Text(tr(context, 'fast')),
+                ),
+                DropdownMenuItem(
+                  value: 150,
+                  child: Text(tr(context, 'balanced')),
+                ),
+                DropdownMenuItem(
+                  value: 300,
+                  child: Text(tr(context, 'safe')),
+                ),
+              ],
+              onChanged: (value) => settings.setScanOptions(
+                settings.scanOptions.copyWith(liveRefreshMs: value),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _adaptiveSelector<T>({
+    required BuildContext context,
+    required T selected,
+    required List<ButtonSegment<T>> segments,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T> onChanged,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final compact = constraints.maxWidth < 380 || textScale > 1.15;
+        if (compact) {
+          return DropdownButtonFormField<T>(
+            value: selected,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 14,
+              ),
+            ),
+            items: items,
+            onChanged: (value) {
+              if (value != null) onChanged(value);
+            },
+          );
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<T>(
+            segments: segments,
+            selected: {selected},
+            onSelectionChanged: (selection) {
+              if (selection.isNotEmpty) onChanged(selection.first);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _section(BuildContext context, String title, List<Widget> children) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+""")
+changes.append(str(settings_screen.relative_to(project)))
+
+settings_test = project / "test" / "settings_responsive_test.dart"
+settings_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/screens/settings_screen.dart';
+
+Future<AppSettings> pumpSettings(
+  WidgetTester tester, {
+  required Size size,
+  required String language,
+  double textScale = 1.3,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  final settings = AppSettings()..language = language;
+  addTearDown(() {
+    settings.dispose();
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  await tester.pumpWidget(
+    ChangeNotifierProvider.value(
+      value: settings,
+      child: MaterialApp(
+        home: const SettingsScreen(),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(textScaler: TextScaler.linear(textScale)),
+            child: Directionality(
+              textDirection:
+                  language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+              child: child!,
+            ),
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+  return settings;
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('320px French settings use reachable full-width selectors', (
+    tester,
+  ) async {
+    final settings = await pumpSettings(
+      tester,
+      size: const Size(320, 720),
+      language: 'fr',
+    );
+
+    final languageField = find.byType(DropdownButtonFormField<String>);
+    final themeField = find.byType(DropdownButtonFormField<ThemeMode>);
+    final refreshField = find.byType(DropdownButtonFormField<int>);
+    expect(languageField, findsOneWidget);
+    expect(themeField, findsOneWidget);
+    expect(refreshField, findsOneWidget);
+    expect(tester.getSize(languageField).height, greaterThanOrEqualTo(48));
+    expect(find.byType(SegmentedButton<String>), findsNothing);
+
+    await tester.tap(languageField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English').last);
+    await tester.pumpAndSettle();
+    expect(settings.language, 'en');
+
+    await tester.ensureVisible(refreshField);
+    await tester.tap(refreshField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Economy').last);
+    await tester.pumpAndSettle();
+    expect(settings.scanOptions.liveRefreshMs, 300);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('360px Arabic settings remain scrollable and selectable in RTL', (
+    tester,
+  ) async {
+    final settings = await pumpSettings(
+      tester,
+      size: const Size(360, 780),
+      language: 'ar',
+    );
+
+    final themeField = find.byType(DropdownButtonFormField<ThemeMode>);
+    expect(themeField, findsOneWidget);
+    expect(
+      Directionality.of(tester.element(find.byType(ListView))),
+      TextDirection.rtl,
+    );
+
+    await tester.tap(themeField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('داكن').last);
+    await tester.pumpAndSettle();
+    expect(settings.themeMode, ThemeMode.dark);
+
+    final refreshField = find.byType(DropdownButtonFormField<int>);
+    await tester.ensureVisible(refreshField);
+    await tester.tap(refreshField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('اقتصادي').last);
+    await tester.pumpAndSettle();
+    expect(settings.scanOptions.liveRefreshMs, 300);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide settings keep the existing segmented controls', (
+    tester,
+  ) async {
+    await pumpSettings(
+      tester,
+      size: const Size(480, 900),
+      language: 'en',
+      textScale: 1,
+    );
+
+    expect(find.byType(SegmentedButton<String>), findsOneWidget);
+    expect(find.byType(SegmentedButton<ThemeMode>), findsOneWidget);
+    expect(find.byType(SegmentedButton<int>), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+}
+""")
+changes.append(str(settings_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(
+        ["dart", "format", str(settings_screen), str(settings_test)],
+        check=True,
+        cwd=project,
+    )
+
 # Increment the Android package version for this responsive-layout release.
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()
@@ -1167,14 +1526,14 @@ pubspec_text, version_count = re.subn(
     count=1,
 )
 if version_count != 1:
-    raise RuntimeError("Expected exactly one intermediate version 1.4.1+25 before setting 1.4.5+29")
+    raise RuntimeError("Expected exactly one intermediate version 1.4.1+25 before setting 1.4.6+30")
 if "version: 1.4.5+29" not in pubspec_text:
     raise RuntimeError("Could not set the responsive release version 1.4.5+29")
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 
 report = {
-    "patch": "torqscan-responsive-dashboard-status-v3",
+    "patch": "torqscan-mobile-settings-responsive-v1",
     "files": {name: sha256(project / name) for name in changes},
     "socket_destroyed_references": 0,
     "original_logo_sha256": original_logo_sha256,

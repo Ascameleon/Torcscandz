@@ -834,6 +834,14 @@ Future<void> pumpDashboard(
   final settings = AppSettings()..language = language;
   final bluetooth = BluetoothService();
   final obd = OBDService(bluetooth);
+  addTearDown(() {
+    obd.stopDemo();
+    obd.dispose();
+    bluetooth.dispose();
+    settings.dispose();
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
   await obd.startDemo();
 
   await tester.pumpWidget(
@@ -859,17 +867,12 @@ Future<void> pumpDashboard(
       ),
     ),
   );
+  // The dashboard starts a periodic demo loop in initState. Stop its timer
+  // while keeping demo mode and sample values for this layout-only test.
+  obd.stopLiveScan();
   await tester.pump();
   expect(find.byType(GridView), findsOneWidget);
   expect(tester.takeException(), isNull);
-  addTearDown(() {
-    obd.stopDemo();
-    obd.dispose();
-    bluetooth.dispose();
-    settings.dispose();
-    tester.view.resetPhysicalSize();
-    tester.view.resetDevicePixelRatio();
-  });
 }
 
 void main() {

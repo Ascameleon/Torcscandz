@@ -215,8 +215,171 @@ home_text = replace_between(
     device_tile,
     "home_screen._deviceTile",
 )
+home_import = "import 'vehicle_selector_screen.dart';"
+if home_text.count(home_import) != 1:
+    raise RuntimeError("Home screen vehicle selector import anchor changed.")
+home_text = home_text.replace(
+    home_import,
+    home_import + "\nimport '../widgets/connection_mode_selector.dart';",
+    1,
+)
+home_text, mode_selector_count = re.subn(
+    r"(?m)^          SegmentedButton<String>\(\n.*?^          \),\n(?=          const SizedBox\(height: 12\),\n          OutlinedButton\.icon\()",
+    """          ConnectionModeSelector(
+            selected: _connectionMode,
+            bluetoothLabel: tr(context, 'bluetooth'),
+            wifiLabel: tr(context, 'wifi_tcp'),
+            onChanged: (mode) {
+              setState(() => _connectionMode = mode);
+              if (mode == 'bluetooth') _initBluetooth();
+            },
+          ),
+""",
+    home_text,
+    count=1,
+    flags=re.S,
+)
+if mode_selector_count != 1:
+    raise RuntimeError(f"Responsive connection-mode selector anchor mismatch: {mode_selector_count}")
+
+home_import = "import 'vehicle_selector_screen.dart';"
+if home_text.count(home_import) != 1:
+    raise RuntimeError("Home screen vehicle selector import anchor changed.")
+home_text = home_text.replace(
+    home_import,
+    home_import + "\nimport '../widgets/connection_mode_selector.dart';",
+    1,
+)
+home_text, mode_selector_count = re.subn(
+    r"(?m)^          SegmentedButton<String>\(\n.*?^          \),\n(?=          const SizedBox\(height: 12\),\n          OutlinedButton\.icon\()",
+    """          ConnectionModeSelector(
+            selected: _connectionMode,
+            bluetoothLabel: tr(context, 'bluetooth'),
+            wifiLabel: tr(context, 'wifi_tcp'),
+            onChanged: (mode) {
+              setState(() => _connectionMode = mode);
+              if (mode == 'bluetooth') _initBluetooth();
+            },
+          ),
+""",
+    home_text,
+    count=1,
+    flags=re.S,
+)
+if mode_selector_count != 1:
+    raise RuntimeError(f"Responsive connection-mode selector anchor mismatch: {mode_selector_count}")
+
 home.write_text(home_text)
 changes.append(str(home.relative_to(project)))
+
+connection_mode_file = project / "lib/widgets/connection_mode_selector.dart"
+connection_mode_file.parent.mkdir(parents=True, exist_ok=True)
+connection_mode_file.write_text("""import 'package:flutter/material.dart';
+
+class ConnectionModeSelector extends StatelessWidget {
+  const ConnectionModeSelector({
+    super.key,
+    required this.selected,
+    required this.bluetoothLabel,
+    required this.wifiLabel,
+    required this.onChanged,
+  });
+
+  final String selected;
+  final String bluetoothLabel;
+  final String wifiLabel;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final compact = constraints.maxWidth < 400 || textScale > 1.15;
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _compactButton(
+                mode: 'bluetooth',
+                label: bluetoothLabel,
+                icon: Icons.bluetooth,
+              ),
+              const SizedBox(height: 8),
+              _compactButton(
+                mode: 'wifi',
+                label: wifiLabel,
+                icon: Icons.wifi,
+              ),
+            ],
+          );
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
+            segments: [
+              ButtonSegment(
+                value: 'bluetooth',
+                label: Text(bluetoothLabel),
+                icon: const Icon(Icons.bluetooth),
+              ),
+              ButtonSegment(
+                value: 'wifi',
+                label: Text(wifiLabel),
+                icon: const Icon(Icons.wifi),
+              ),
+            ],
+            selected: {selected},
+            onSelectionChanged: (selection) {
+              if (selection.isNotEmpty) onChanged(selection.first);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _compactButton({
+    required String mode,
+    required String label,
+    required IconData icon,
+  }) {
+    final child = Text(
+      label,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+    );
+    if (selected == mode) {
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: () => onChanged(mode),
+          icon: Icon(icon),
+          label: child,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => onChanged(mode),
+        icon: Icon(icon),
+        label: child,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+        ),
+      ),
+    );
+  }
+}
+""")
+changes.append(str(connection_mode_file.relative_to(project)))
 
 # Rebuild the diagnostic screen's widget tree in formatted Dart to restore balanced closures.
 vehicle_info = project / "lib/screens/vehicle_info_screen.dart"
@@ -1524,24 +1687,194 @@ if __import__('shutil').which('dart'):
         cwd=project,
     )
 
+# Keep the Bluetooth/Wi-Fi connection mode reachable on compact phones and with enlarged text.
+mode_test = project / "test" / "connection_mode_responsive_test.dart"
+mode_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:torqscan/widgets/connection_mode_selector.dart';
+
+class _ModeHarness extends StatefulWidget {
+  const _ModeHarness({
+    required this.bluetoothLabel,
+    required this.wifiLabel,
+  });
+
+  final String bluetoothLabel;
+  final String wifiLabel;
+
+  @override
+  State<_ModeHarness> createState() => _ModeHarnessState();
+}
+
+class _ModeHarnessState extends State<_ModeHarness> {
+  String _mode = 'bluetooth';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConnectionModeSelector(
+              selected: _mode,
+              bluetoothLabel: widget.bluetoothLabel,
+              wifiLabel: widget.wifiLabel,
+              onChanged: (mode) => setState(() => _mode = mode),
+            ),
+            const SizedBox(height: 12),
+            Text('Mode: ' + _mode),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> pumpModeSelector(
+  WidgetTester tester, {
+  required Size size,
+  required double textScale,
+  required String bluetoothLabel,
+  required String wifiLabel,
+  TextDirection direction = TextDirection.ltr,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: _ModeHarness(
+        bluetoothLabel: bluetoothLabel,
+        wifiLabel: wifiLabel,
+      ),
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(textScaler: TextScaler.linear(textScale)),
+          child: Directionality(
+            textDirection: direction,
+            child: child!,
+          ),
+        );
+      },
+    ),
+  );
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('320px French connection modes use full-width touch targets', (
+    tester,
+  ) async {
+    await pumpModeSelector(
+      tester,
+      size: const Size(320, 720),
+      textScale: 1.3,
+      bluetoothLabel: 'Bluetooth',
+      wifiLabel: 'Wi-Fi TCP',
+    );
+
+    expect(find.byType(SegmentedButton<String>), findsNothing);
+    final wifiButton = find.widgetWithText(OutlinedButton, 'Wi-Fi TCP');
+    expect(wifiButton, findsOneWidget);
+    expect(tester.getSize(wifiButton).height, greaterThanOrEqualTo(48));
+    await tester.tap(wifiButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Mode: wifi'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('360px Arabic connection modes remain readable and selectable in RTL', (
+    tester,
+  ) async {
+    await pumpModeSelector(
+      tester,
+      size: const Size(360, 780),
+      textScale: 1.3,
+      bluetoothLabel: 'بلوتوث',
+      wifiLabel: 'واي فاي TCP',
+      direction: TextDirection.rtl,
+    );
+
+    expect(
+      Directionality.of(tester.element(find.byType(ConnectionModeSelector))),
+      TextDirection.rtl,
+    );
+    expect(find.byType(SegmentedButton<String>), findsNothing);
+    await tester.tap(find.text('واي فاي TCP'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mode: wifi'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide phones retain the original segmented connection control', (
+    tester,
+  ) async {
+    await pumpModeSelector(
+      tester,
+      size: const Size(480, 900),
+      textScale: 1,
+      bluetoothLabel: 'Bluetooth',
+      wifiLabel: 'Wi-Fi TCP',
+    );
+
+    expect(find.byType(SegmentedButton<String>), findsOneWidget);
+    expect(find.byType(FilledButton), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('enlarged text switches the wide layout to stacked controls', (
+    tester,
+  ) async {
+    await pumpModeSelector(
+      tester,
+      size: const Size(480, 900),
+      textScale: 1.45,
+      bluetoothLabel: 'Bluetooth connection',
+      wifiLabel: 'Wi-Fi TCP adapter',
+    );
+
+    expect(find.byType(SegmentedButton<String>), findsNothing);
+    expect(find.byType(FilledButton), findsOneWidget);
+    expect(find.byType(OutlinedButton), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+""")
+changes.append(str(mode_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(
+        ["dart", "format", str(home), str(connection_mode_file), str(mode_test)],
+        check=True,
+        cwd=project,
+    )
+
 # Increment the Android package version for this responsive-layout release.
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()
 pubspec_text, version_count = re.subn(
     r"(?m)^version: 1\.4\.1\+25$",
-    "version: 1.4.5+29",
+    "version: 1.4.7+31",
     pubspec_text,
     count=1,
 )
 if version_count != 1:
-    raise RuntimeError("Expected exactly one intermediate version 1.4.1+25 before setting 1.4.6+30")
+    raise RuntimeError("Expected exactly one intermediate version 1.4.1+25 before setting 1.4.7+31")
 if "version: 1.4.5+29" not in pubspec_text:
     raise RuntimeError("Could not set the responsive release version 1.4.5+29")
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 
 report = {
-    "patch": "torqscan-mobile-settings-responsive-v1",
+    "patch": "torqscan-mobile-connection-mode-responsive-v1",
     "files": {name: sha256(project / name) for name in changes},
     "socket_destroyed_references": 0,
     "original_logo_sha256": original_logo_sha256,

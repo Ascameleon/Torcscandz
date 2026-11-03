@@ -1894,8 +1894,294 @@ if "version: 1.4.8+32" not in pubspec_text:
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 
+
+# Generate the searchable global model catalogue and selectable engine families.
+catalog_path = Path(__file__).resolve().parent / "vehicle_catalog.txt"
+if not catalog_path.is_file():
+    raise RuntimeError("ci/vehicle_catalog.txt is missing")
+catalog_rows = []
+for line in catalog_path.read_text(encoding="utf-8").splitlines():
+    parts = line.split("|", 5)
+    if len(parts) != 6:
+        raise RuntimeError("Malformed vehicle catalogue row: " + line)
+    catalog_rows.append(parts)
+if len(catalog_rows) < 90:
+    raise RuntimeError("Vehicle catalogue unexpectedly contains fewer than 90 models")
+vehicle_source = """class VehicleModel {
+  final String id, brand, model, year, body, image;
+  final List<String> engines;
+  const VehicleModel({required this.id, required this.brand, required this.model,
+    required this.year, required this.body, required this.image, required this.engines});
+}
+class VehicleCatalog {
+  static VehicleModel _v(String id, String brand, String model, String year,
+      String body, String engines) => VehicleModel(
+    id:id, brand:brand, model:model, year:year, body:body,
+    image:'assets/vehicles/generic_obd.png', engines:engines.split(';'));
+  // Engine labels are broad families; verify year, market and VIN before repairs.
+  static final List<VehicleModel> vehicles = [
+""" + "".join(
+    "    _v(" + ", ".join(json.dumps(value, ensure_ascii=False) for value in row) + "),\n"
+    for row in catalog_rows
+) + """  ];
+  static List<String> get brands => vehicles.map((v) => v.brand).toSet().toList()..sort();
+  static VehicleModel? byId(String? id) {
+    for (final vehicle in vehicles) { if (vehicle.id == id) return vehicle; }
+    return null;
+  }
+  static String? engineLabelFor(String? vehicleId, String? engineId) {
+    final vehicle = byId(vehicleId);
+    if (vehicle == null || engineId == null) return null;
+    for (final engine in vehicle.engines) { if (engine == engineId) return engine; }
+    return null;
+  }
+}
+"""
+vehicle_file = project / "lib" / "models" / "vehicle.dart"
+vehicle_file.write_text(vehicle_source)
+changes.append(str(vehicle_file.relative_to(project)))
+
+settings_file = project / "lib" / "core" / "app_settings.dart"
+settings_text = settings_file.read_text()
+if "String? selectedEngineId;" not in settings_text:
+    settings_text = settings_text.replace("  String? selectedVehicleId;\n",
+        "  String? selectedVehicleId;\n  String? selectedEngineId;\n", 1)
+settings_text = settings_text.replace(
+    "  void setVehicle(String? id) {\n    selectedVehicleId = id;\n    notifyListeners();\n  }\n",
+    "  void setVehicle(String? id, {String? engineId}) {\n    selectedVehicleId = id;\n    selectedEngineId = engineId;\n    notifyListeners();\n  }\n", 1)
+if "String? selectedEngineId;" not in settings_text or "selectedEngineId = engineId" not in settings_text:
+    raise RuntimeError("Could not extend AppSettings with selected engine family")
+settings_file.write_text(settings_text)
+changes.append(str(settings_file.relative_to(project)))
+
+selector = project / "lib" / "screens" / "vehicle_selector_screen.dart"
+selector.write_text("""import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../core/app_settings.dart';
+import '../models/vehicle.dart';
+
+class VehicleSelectorScreen extends StatefulWidget {
+  const VehicleSelectorScreen({super.key});
+  @override
+  State<VehicleSelectorScreen> createState() => _VehicleSelectorScreenState();
+}
+class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
+  String _query = '';
+  String _brand = 'Toutes';
+  VehicleModel? _selected;
+  String? _selectedEngine;
+
+  @override
+  void initState() {
+    super.initState();
+    final settings = context.read<AppSettings>();
+    _selected = VehicleCatalog.byId(settings.selectedVehicleId);
+    _selectedEngine = settings.selectedEngineId;
+    if (_selected != null && !_selected!.engines.contains(_selectedEngine)) {
+      _selectedEngine = _selected!.engines.first;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brands = ['Toutes', ...VehicleCatalog.brands];
+    final q = _query.trim().toLowerCase();
+    final list = VehicleCatalog.vehicles.where((v) {
+      final matchesBrand = _brand == 'Toutes' || v.brand == _brand;
+      final searchable = (v.brand + ' ' + v.model + ' ' + v.year + ' ' + v.engines.join(' ')).toLowerCase();
+      return matchesBrand && searchable.contains(q);
+    }).toList();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr(context, 'select_vehicle')),
+        actions: [Padding(
+          padding: const EdgeInsetsDirectional.only(end: 16),
+          child: Center(child: Text((VehicleCatalog.vehicles.length - 1).toString() + ' modèles')),
+        )],
+      ),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: TextField(
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'Marque, modèle, moteur, carburant...',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        SizedBox(height: 48, child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: brands.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) => ChoiceChip(
+            label: Text(brands[i]),
+            selected: _brand == brands[i],
+            onSelected: (_) => setState(() => _brand = brands[i]),
+          ),
+        )),
+        Expanded(child: list.isEmpty
+          ? const Center(child: Text('Aucun modèle correspondant'))
+          : GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 260,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                mainAxisExtent: 224,
+              ),
+              itemCount: list.length,
+              itemBuilder: (_, i) => _vehicleCard(context, list[i]),
+            )),
+      ]),
+      bottomNavigationBar: SafeArea(child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (_selected != null) ...[
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text('Motorisation — ' + _selected!.brand + ' ' + _selected!.model,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<String>(
+              key: ValueKey('engine-' + _selected!.id),
+              isExpanded: true,
+              value: _selectedEngine,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.settings_suggest_outlined),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              items: _selected!.engines.map((engine) => DropdownMenuItem<String>(
+                value: engine,
+                child: Text(engine, maxLines: 2, overflow: TextOverflow.ellipsis),
+              )).toList(),
+              onChanged: (engine) => setState(() => _selectedEngine = engine),
+            ),
+            const SizedBox(height: 8),
+          ],
+          SizedBox(width: double.infinity, height: 52,
+            child: FilledButton.icon(
+              onPressed: _selected == null || _selectedEngine == null ? null : () {
+                context.read<AppSettings>().setVehicle(_selected!.id, engineId: _selectedEngine);
+                Navigator.pop(context, _selected);
+              },
+              icon: const Icon(Icons.check),
+              label: Text(tr(context, 'save')),
+            )),
+        ]),
+      )),
+    );
+  }
+
+  Widget _vehicleCard(BuildContext context, VehicleModel v) {
+    final selected = _selected?.id == v.id;
+    return InkWell(
+      onTap: () => setState(() { _selected = v; _selectedEngine = v.engines.first; }),
+      borderRadius: BorderRadius.circular(18),
+      child: Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: selected ? BorderSide(color: Theme.of(context).colorScheme.primary, width: 2) : BorderSide.none,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: Container(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            width: double.infinity,
+            child: Image.asset(v.image, fit: BoxFit.contain),
+          )),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(v.brand + ' ' + v.model, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 3),
+              Text(v.year + ' • ' + v.body, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 3),
+              Text(v.engines.length.toString() + ' motorisations', style: Theme.of(context).textTheme.labelSmall),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+""")
+changes.append(str(selector.relative_to(project)))
+
+home = project / "lib" / "screens" / "home_screen.dart"
+home_text = home.read_text()
+needle = "Text('\${vehicle.year} • \${vehicle.body}', style: Theme.of(context).textTheme.bodySmall)"
+replacement = needle + ",\n              if (VehicleCatalog.engineLabelFor(vehicle.id, context.watch<AppSettings>().selectedEngineId) case final engine?) ...[\n                const SizedBox(height: 4),\n                Text(engine, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),\n              ]"
+if needle in home_text:
+    home_text = home_text.replace(needle, replacement, 1)
+home.write_text(home_text)
+changes.append(str(home.relative_to(project)))
+
+catalog_test = project / "test" / "vehicle_catalog_test.dart"
+catalog_test.write_text("""import 'package:flutter_test/flutter_test.dart';
+import 'package:torqscan/models/vehicle.dart';
+
+void main() {
+  group('Vehicle catalogue', () {
+    test('contains broad global make and model coverage', () {
+      expect(VehicleCatalog.vehicles.length, greaterThanOrEqualTo(90));
+      expect(VehicleCatalog.brands.length, greaterThanOrEqualTo(40));
+      expect(VehicleCatalog.byId('peugeot_208')?.model, '208');
+      expect(VehicleCatalog.byId('toyota_rav4')?.brand, 'Toyota');
+      expect(VehicleCatalog.byId('tesla_modely')?.model, 'Model Y');
+      expect(VehicleCatalog.byId('generic_obd'), isNotNull);
+    });
+    test('every model has a stable unique ID and engine choices', () {
+      final ids = VehicleCatalog.vehicles.map((v) => v.id).toList();
+      expect(ids.toSet().length, ids.length);
+      for (final v in VehicleCatalog.vehicles) {
+        expect(v.id, isNotEmpty);
+        expect(v.engines, isNotEmpty, reason: v.id);
+        expect(v.engines.every((e) => e.trim().isNotEmpty), isTrue);
+        expect(VehicleCatalog.byId(v.id), same(v));
+      }
+    });
+    test('engine selection resolves only within the selected model', () {
+      final golf = VehicleCatalog.byId('vw_golf')!;
+      expect(golf.engines.any((e) => e.contains('TDI')), isTrue);
+      expect(golf.engines.any((e) => e.contains('TSI')), isTrue);
+      expect(VehicleCatalog.engineLabelFor('vw_golf', golf.engines.first), golf.engines.first);
+      expect(VehicleCatalog.engineLabelFor('vw_golf', 'not-a-golf-engine'), isNull);
+      expect(VehicleCatalog.engineLabelFor('unknown', '2.0 TDI'), isNull);
+    });
+    test('petrol, diesel, LPG, hybrid and electric families are represented', () {
+      final all = VehicleCatalog.vehicles.expand((v) => v.engines).join(' ').toLowerCase();
+      expect(all, contains('électrique'));
+      expect(all, contains('hybride'));
+      expect(all, contains('diesel'));
+      expect(all, contains('essence'));
+      expect(all, contains('gpl'));
+    });
+  });
+}
+""")
+changes.append(str(catalog_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(["dart","format",str(vehicle_file),str(selector),str(settings_file),str(home),str(catalog_test)],check=True,cwd=project)
+
+pubspec = project / "pubspec.yaml"
+pubspec_text = pubspec.read_text()
+pubspec_text, version_count = re.subn(r"(?m)^version: 1\.4\.1\+25$", "version: 1.4.9+33", pubspec_text, count=1)
+if version_count != 1:
+    raise RuntimeError("Expected source baseline version 1.4.1+25 before setting 1.4.9+33")
+pubspec.write_text(pubspec_text)
+changes.append(str(pubspec.relative_to(project)))
+
+
 report = {
-    "patch": "torqscan-dashboard-compact-grid-v1",
+    "patch": "torqscan-global-vehicle-engine-catalog-v1",
     "files": {name: sha256(project / name) for name in changes},
     "socket_destroyed_references": 0,
     "original_logo_sha256": original_logo_sha256,

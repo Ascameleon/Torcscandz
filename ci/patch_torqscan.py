@@ -552,47 +552,17 @@ manifest_file.write_text(manifest_text)
 ET.parse(manifest_file)
 changes.append(str(manifest_file.relative_to(project)))
 
-icon_xml = """<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="432"
-    android:viewportHeight="432">
-    <path android:fillColor="#07152D" android:pathData="M0,0h432v432h-432z"/>
-    <path android:fillColor="#061A39" android:strokeColor="#00DDF8" android:strokeWidth="8"
-        android:pathData="M78,14h276c36,0 64,28 64,64v276c0,36 -28,64 -64,64h-276c-36,0 -64,-28 -64,-64v-276c0,-36 28,-64 64,-64z"/>
-    <path android:strokeColor="#16DFFF" android:strokeWidth="9" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"
-        android:pathData="M93,75 L93,39 M93,57 L125,26 M93,57 L125,88 M125,26 L125,88"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="9" android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M270,42 C302,42 328,56 346,79 M282,73 C302,73 318,82 330,96 M296,105 L296,106"/>
-    <path android:fillColor="#0A2445" android:strokeColor="#B9E7FF" android:strokeWidth="7" android:strokeLineJoin="round"
-        android:pathData="M61,142 Q61,124 81,124 H247 Q264,124 274,141 L291,171 Q297,181 285,190 L265,204 H76 Q57,204 57,185 Z"/>
-    <path android:fillColor="#071426" android:strokeColor="#25D9FF" android:strokeWidth="4"
-        android:pathData="M82,144 H254 Q264,144 270,155 L280,176 H69 L73,153 Q75,144 82,144 Z"/>
-    <path android:fillColor="#42E8FF" android:pathData="M93,158a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M124,158a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M155,158a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M186,158a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M217,158a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M248,158a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M108,181a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M139,181a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M170,181a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M201,181a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M232,181a6,6 0,1 0,12 0a6,6 0,1 0,-12 0"/>
-    <path android:fillColor="#0B2B50" android:strokeColor="#1CCFFF" android:strokeWidth="7" android:strokeLineJoin="round"
-        android:pathData="M63,286 L78,249 Q88,229 112,229 H232 Q253,229 267,247 L286,280 L286,318 H59 Z"/>
-    <path android:fillColor="#071426" android:strokeColor="#B8E9FF" android:strokeWidth="5"
-        android:pathData="M111,239 H229 Q244,239 254,254 L267,278 H83 L96,252 Q101,239 111,239 Z"/>
-    <path android:fillColor="#21DFFF" android:pathData="M83,281 L119,281 L105,291 L88,291 Z M230,281 L266,281 L260,291 L243,291 Z"/>
-    <path android:fillColor="#071426" android:strokeColor="#16DFFF" android:strokeWidth="5"
-        android:pathData="M76,306a17,17 0,1 0,34 0a17,17 0,1 0,-34 0 M236,306a17,17 0,1 0,34 0a17,17 0,1 0,-34 0"/>
-    <path android:fillColor="#08162C" android:strokeColor="#25DFFF" android:strokeWidth="10"
-        android:pathData="M294,270a54,54 0,1 0,108 0a54,54 0,1 0,-108 0"/>
-    <path android:strokeColor="#21DFFF" android:strokeWidth="22" android:strokeLineCap="round"
-        android:pathData="M376,310 L409,350"/>
-    <path android:fillColor="#1A0B13" android:strokeColor="#FF5B35" android:strokeWidth="5" android:strokeLineJoin="round"
-        android:pathData="M322,258 H342 L351,246 H378 L388,258 H397 V282 H385 L376,293 H342 L331,282 H322 Z"/>
-    <path android:strokeColor="#FFDA5A" android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M336,272 L350,272 L359,261 L367,282 L376,268 L385,272"/>
-</vector>
-"""
-drawable = project / "android/app/src/main/res/drawable/ic_launcher_foreground.xml"
-drawable.parent.mkdir(parents=True, exist_ok=True)
-drawable.write_text(icon_xml)
-changes.append(str(drawable.relative_to(project)))
+# Preserve the exact user-supplied launcher artwork from the source archive.
+logo_asset = project / "android/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png"
+if not logo_asset.is_file():
+    raise RuntimeError("The original Torque ScanDZ launcher logo is missing.")
+original_logo_sha256 = sha256(logo_asset)
+
+
 
 # Verify product identity and ensure the existing splash-screen resources were not altered.
+if sha256(logo_asset) != original_logo_sha256:
+    raise RuntimeError("The original Torque ScanDZ launcher logo changed during patching.")
 if 'android:label="Torque ScanDZ"' not in manifest_text:
     raise RuntimeError("Launcher label was not updated.")
 if "ThemeMode.light" not in settings_text:
@@ -677,15 +647,13 @@ dashboard_text = dashboard_text.replace(
               style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: accent, height: 1),
             ),
 """,
-    """            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: accent, height: 1),
-                ),
+    """            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: accent, height: 1),
               ),
             ),
 """,
@@ -1206,6 +1174,7 @@ report = {
     "patch": "torqscan-responsive-dashboard-status-v3",
     "files": {name: sha256(project / name) for name in changes},
     "socket_destroyed_references": 0,
+    "original_logo_sha256": original_logo_sha256,
 }
 (project / "torqscan-patch-report.json").write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps({"status": "patched", "files": changes, "report": report}, indent=2))

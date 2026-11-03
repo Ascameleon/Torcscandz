@@ -746,6 +746,194 @@ dashboard_text = dashboard_text.replace(
 dashboard_file.write_text(dashboard_text)
 changes.append(str(dashboard_file.relative_to(project)))
 
+# Keep the live connection/status strip readable on narrow phones and in RTL.
+# On compact widths, move protocol and scan state to a second wrapping row.
+status_start = dashboard_text.find("              // Status bar")
+status_end = dashboard_text.find("\n\n              if (obd.lastError != null)", status_start)
+if status_start < 0 or status_end < 0:
+    raise RuntimeError("Dashboard status strip boundaries were not found")
+status_block = """              // Status bar
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 360;
+                  final indicator = Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: obd.isScanning ? scheme.primary : Colors.orange,
+                      shape: BoxShape.circle,
+                    ),
+                  );
+                  final connection = Text(
+                    obd.isDemo
+                        ? '${tr(context, 'demo_mode')} • ${bt.connectionLabel}'
+                        : bt.connectionLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                  final protocol = obd.protocol == null
+                      ? null
+                      : Text(
+                          obd.protocol!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        );
+                  final scanState = Text(
+                    obd.isScanning ? tr(context, 'live') : tr(context, 'pause'),
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: obd.isScanning ? scheme.primary : Colors.orange,
+                    ),
+                  );
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    color: scheme.surfaceContainerHighest.withOpacity(0.5),
+                    child: compact
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  indicator,
+                                  const SizedBox(width: 10),
+                                  Expanded(child: connection),
+                                ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 20, top: 6),
+                                child: Wrap(
+                                  spacing: 12,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    if (protocol != null) protocol,
+                                    scanState,
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              indicator,
+                              const SizedBox(width: 10),
+                              Expanded(child: connection),
+                              if (protocol != null) ...[
+                                const SizedBox(width: 10),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 112),
+                                  child: protocol,
+                                ),
+                              ],
+                              const SizedBox(width: 10),
+                              scanState,
+                            ],
+                          ),
+                  );
+                },
+              ),"""
+dashboard_text = dashboard_text[:status_start] + status_block + dashboard_text[status_end:]
+dashboard_file.write_text(dashboard_text)
+
+# A real widget regression test: the live dashboard must render without
+# RenderFlex overflow at 320px with enlarged text and Arabic RTL direction.
+dashboard_test = project / "test" / "dashboard_responsive_test.dart"
+dashboard_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/screens/dashboard_screen.dart';
+import 'package:torqscan/services/bluetooth_service.dart';
+import 'package:torqscan/services/obd_service.dart';
+
+Future<void> pumpDashboard(
+  WidgetTester tester, {
+  required Size size,
+  required String language,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  final settings = AppSettings()..language = language;
+  final bluetooth = BluetoothService();
+  final obd = OBDService(bluetooth);
+  await obd.startDemo();
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: settings),
+        ChangeNotifierProvider.value(value: bluetooth),
+        ChangeNotifierProvider.value(value: obd),
+      ],
+      child: MaterialApp(
+        home: const DashboardScreen(),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(textScaler: TextScaler.linear(1.3)),
+            child: Directionality(
+              textDirection:
+                  language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+              child: child!,
+            ),
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pump();
+  expect(find.byType(GridView), findsOneWidget);
+  expect(tester.takeException(), isNull);
+  addTearDown(() {
+    obd.stopDemo();
+    obd.dispose();
+    bluetooth.dispose();
+    settings.dispose();
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('live dashboard fits a 320px French phone with enlarged text', (
+    tester,
+  ) async {
+    await pumpDashboard(
+      tester,
+      size: const Size(320, 720),
+      language: 'fr',
+    );
+    expect(find.text('DEMO / Simulation'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('live dashboard status strip remains safe in 360px RTL', (
+    tester,
+  ) async {
+    await pumpDashboard(
+      tester,
+      size: const Size(360, 780),
+      language: 'ar',
+    );
+    expect(find.byType(GridView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+""")
+changes.append(str(dashboard_test.relative_to(project)))
+
 # Preserve Android's native text scaling; responsive widgets must handle it.
 main_file = project / "lib/main.dart"
 main_text = main_file.read_text()
@@ -1001,13 +1189,13 @@ if __import__('shutil').which('dart'):
 # Increment the Android package version for this responsive-layout release.
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text().replace("version: 1.4.1+25", "version: 1.4.4+28")
-if "version: 1.4.4+28" not in pubspec_text:
-    raise RuntimeError("Could not set the responsive release version 1.4.4+28")
+if "version: 1.4.5+29" not in pubspec_text:
+    raise RuntimeError("Could not set the responsive release version 1.4.5+29")
 pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 
 report = {
-    "patch": "torqscan-responsive-selector-v2",
+    "patch": "torqscan-responsive-dashboard-status-v3",
     "files": {name: sha256(project / name) for name in changes},
     "socket_destroyed_references": 0,
 }

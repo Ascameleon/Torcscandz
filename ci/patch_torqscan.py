@@ -2280,7 +2280,7 @@ void main() {
     await pumpSelector(tester, width: 320, rtl: true);
     await tester.enterText(find.byType(TextField), 'Peugeot 208');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Peugeot 208'));
+    await tester.tap(find.text('Peugeot 208').last);
     await tester.pumpAndSettle();
     expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
     expect(find.text('المحرك — Peugeot 208'), findsOneWidget);

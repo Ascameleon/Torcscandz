@@ -628,6 +628,135 @@ if __import__('shutil').which('dart'):
     )
 
 
+
+# Responsive layout corrections: prevent long labels, values and icons from
+# overflowing dashboard cards on narrow phones or enlarged Android text.
+dashboard_file = project / "lib/screens/dashboard_screen.dart"
+dashboard_text = dashboard_file.read_text()
+dashboard_text = dashboard_text.replace(
+    """                Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+""",
+    """                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                ),
+""",
+)
+dashboard_text = dashboard_text.replace(
+    """            Text(
+              value,
+              style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: accent, height: 1),
+            ),
+""",
+    """            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: accent, height: 1),
+                ),
+              ),
+            ),
+""",
+)
+dashboard_text = dashboard_text.replace(
+    """            Text(unit, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+""",
+    """            Text(
+              unit,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+""",
+)
+dashboard_text = dashboard_text.replace(
+    """                  childAspectRatio: 1.35,
+""",
+    """                  childAspectRatio: 1.12,
+""",
+)
+dashboard_text = dashboard_text.replace(
+    """            Text(
+              data?.displayValue ?? '—',
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: accent),
+            ),
+""",
+    """            Flexible(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    data?.displayValue ?? '—',
+                    maxLines: 1,
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: accent),
+                  ),
+                ),
+              ),
+            ),
+""",
+)
+dashboard_text = dashboard_text.replace(
+    """            Text(
+              data?.unit ?? PIDDefinitions.getUnit(pid),
+              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+""",
+    """            Text(
+              data?.unit ?? PIDDefinitions.getUnit(pid),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+""",
+)
+dashboard_file.write_text(dashboard_text)
+changes.append(str(dashboard_file.relative_to(project)))
+
+# Keep Android accessibility text scaling, but cap extreme scaling to a
+# phone-safe ceiling so selector chips, icons and fixed action areas stay inside.
+main_file = project / "lib/main.dart"
+main_text = main_file.read_text()
+old_builder = """        builder: (context, child) => Directionality(
+          textDirection: settings.isArabic ? TextDirection.rtl : TextDirection.ltr,
+          child: child!,
+        ),
+"""
+new_builder = """        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          final safeScale = media.textScaler.scale(1).clamp(0.9, 1.15).toDouble();
+          return MediaQuery(
+            data: media.copyWith(textScaler: TextScaler.linear(safeScale)),
+            child: Directionality(
+              textDirection: settings.isArabic ? TextDirection.rtl : TextDirection.ltr,
+              child: child!,
+            ),
+          );
+        },
+"""
+if old_builder not in main_text:
+    raise RuntimeError("Expected MaterialApp builder was not found for responsive text scaling")
+main_file.write_text(main_text.replace(old_builder, new_builder))
+changes.append(str(main_file.relative_to(project)))
+
+# Increment the Android package version for this responsive-layout release.
+pubspec = project / "pubspec.yaml"
+pubspec_text = pubspec.read_text().replace("version: 1.4.1+25", "version: 1.4.3+27")
+if "version: 1.4.3+27" not in pubspec_text:
+    raise RuntimeError("Could not set the responsive release version 1.4.3+27")
+pubspec.write_text(pubspec_text)
+changes.append(str(pubspec.relative_to(project)))
+
+
 report = {
     "patch": "torqscan-dart-compile-fixes-v1",
     "files": {name: sha256(project / name) for name in changes},

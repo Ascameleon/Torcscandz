@@ -3061,7 +3061,7 @@ demo_locales = [
     ("وضع التجربة", "وضع تجريبي — هذه الرموز افتراضية ولم تُقرأ من وحدة تحكم فعلية."),
 ]
 for mode_label, warning in demo_locales:
-    pattern = r"('demo_mode'\s*:\s*" + re.escape(json.dumps(mode_label, ensure_ascii=False)) + r"\s*,)"
+    pattern = r"('demo_mode'\s*:\s*'" + re.escape(mode_label) + r"'\s*,)"
     settings_text, localized = re.subn(
         pattern,
         lambda match, value=warning: match.group(1)

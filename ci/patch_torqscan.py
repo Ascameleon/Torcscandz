@@ -3750,7 +3750,7 @@ changes.append(str(vin_test.relative_to(project)))
 if __import__('shutil').which('dart'):
     subprocess.run(
         ["dart", "format", str(protocol_file), str(obd_service), str(settings_file),
-         str(vehicle_info), str(vin_test), str(vin_protocol_test)],
+         str(vehicle_info), str(vin_test)],
         check=True,
         cwd=project,
     )
@@ -3819,6 +3819,8 @@ void main() {
 }
 """, encoding="utf-8")
 changes.append(str(vin_protocol_test.relative_to(project)))
+if __import__('shutil').which('dart'):
+    subprocess.run(["dart", "format", str(vin_protocol_test)], check=True, cwd=project)
 
 
 report = {

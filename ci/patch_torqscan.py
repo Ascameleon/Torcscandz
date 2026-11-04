@@ -3277,12 +3277,12 @@ pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text(encoding="utf-8")
 pubspec_text, version_count = re.subn(
     r"(?m)^version:\s*1\.4\.12\+36\s*$",
-    "version: 1.4.13+37",
+    "version: 1.4.14+38",
     pubspec_text,
     count=1,
 )
 if version_count != 1:
-    raise RuntimeError("Expected generated version 1.4.12+36 before setting 1.4.13+37")
+    raise RuntimeError("Expected generated version 1.4.12+36 before setting 1.4.14+38")
 pubspec.write_text(pubspec_text, encoding="utf-8")
 changes.append(str(pubspec.relative_to(project)))
 
@@ -3364,6 +3364,332 @@ if __import__('shutil').which('dart'):
     subprocess.run(["dart", "format", str(dtc_file), str(dtc_test)], check=True, cwd=project)
 changes.append(str(dtc_file.relative_to(project)))
 changes.append(str(dtc_test.relative_to(project)))
+
+
+
+# Add a real ECU VIN read (SAE J1979 Mode 09, PID 02). This is deliberately
+# unavailable in demo mode and does not infer model/engine fitment from VIN.
+protocol_file = project / "lib/services/obd_protocol.dart"
+protocol_text = protocol_file.read_text(encoding="utf-8")
+if "static String? decodeVin(String response)" not in protocol_text:
+    vin_decoder = """  static String? decodeVin(String response) {
+    final bytes = findPidData(response, '0902');
+    if (bytes.isEmpty) return null;
+    // Mode 09 PID 02 begins with the number of VIN data items (usually 01).
+    final payload = bytes.first <= 0x20 ? bytes.skip(1).take(17).toList() : bytes.take(17).toList();
+    if (payload.length != 17) return null;
+    final vin = String.fromCharCodes(payload).toUpperCase();
+    // ISO 3779 VINs exclude I, O and Q. Do not impose the North-American
+    // check-digit rule: many international-market VINs do not use it.
+    return RegExp(r'^[A-HJ-NPR-Z0-9]{17}    "patch": "torqscan-vin-read-responsive-info-v1",
+    "vin_decoder": "SAE J1979 Mode 09 PID 02; 17-character ISO 3779 validation; no automatic engine fitment",
+    "files": {name: sha256(project / name) for name in changes},
+    "catalog_data_sha256": sha256(catalog_path),
+    "catalog_model_entries": len(catalog_rows) - 1,
+    "catalog_manufacturers": len({row[1] for row in catalog_rows if row[0] != "generic_obd"}),
+    "socket_destroyed_references": 0,
+    "original_logo_sha256": original_logo_sha256,
+}
+(project / "torqscan-patch-report.json").write_text(json.dumps(report, indent=2) + "\n")
+print(json.dumps({"status": "patched", "files": changes, "report": report}, indent=2))
+).hasMatch(vin) ? vin : null;
+  }
+
+"""
+    class_end = protocol_text.rfind("\\n}")
+    if class_end < 0:
+        raise RuntimeError("OBD protocol class closing anchor missing for VIN decoder")
+    protocol_text = protocol_text[:class_end] + "\\n" + vin_decoder + protocol_text[class_end:]
+protocol_file.write_text(protocol_text, encoding="utf-8")
+changes.append(str(protocol_file.relative_to(project)))
+
+obd_service = project / "lib/services/obd_service.dart"
+obd_text = obd_service.read_text(encoding="utf-8")
+field_anchor = "  VehicleCapabilities _capabilities = const VehicleCapabilities();\\n"
+if "String? _vin;" not in obd_text:
+    if obd_text.count(field_anchor) != 1:
+        raise RuntimeError("OBDService VIN state insertion anchor changed")
+    obd_text = obd_text.replace(
+        field_anchor,
+        field_anchor + "  String? _vin;\\n  String? _vinError;\\n  bool _readingVin = false;\\n",
+        1,
+    )
+getter_anchor = "  VehicleCapabilities get capabilities => _capabilities;\\n"
+if "String? get vin => _vin;" not in obd_text:
+    if obd_text.count(getter_anchor) != 1:
+        raise RuntimeError("OBDService VIN getter insertion anchor changed")
+    obd_text = obd_text.replace(
+        getter_anchor,
+        getter_anchor + "  String? get vin => _vin;\\n  String? get vinError => _vinError;\\n  bool get isReadingVin => _readingVin;\\n",
+        1,
+    )
+reset_anchor = "    _capabilities = const VehicleCapabilities();\\n"
+if obd_text.count(reset_anchor) != 2:
+    raise RuntimeError("Expected reset and stopDemo capability-reset anchors; found " + str(obd_text.count(reset_anchor)))
+obd_text = obd_text.replace(
+    reset_anchor,
+    reset_anchor + "    _vin = null;\\n    _vinError = null;\\n    _readingVin = false;\\n",
+)
+demo_anchor = "    _protocol = 'DEMO / Simulation';\\n"
+if obd_text.count(demo_anchor) != 1:
+    raise RuntimeError("OBDService demo-mode anchor changed")
+obd_text = obd_text.replace(
+    demo_anchor,
+    demo_anchor + "    _vin = null;\\n    _vinError = null;\\n    _readingVin = false;\\n",
+    1,
+)
+listener_anchor = "  void _startListener() {\\n"
+if obd_text.count(listener_anchor) != 1:
+    raise RuntimeError("OBDService listener insertion anchor changed")
+vin_reader = """  Future<String?> readVin() async {
+    if (_isDemo || !_isInitialized || !_bluetooth.isConnected) {
+      _vinError = _isDemo
+          ? 'VIN reading is disabled in demo mode.'
+          : 'A live OBD-II ECU connection is required.';
+      notifyListeners();
+      return null;
+    }
+    stopLiveScan();
+    _vin = null;
+    _vinError = null;
+    _readingVin = true;
+    notifyListeners();
+    try {
+      final response = await _sendCommand(
+        '0902',
+        timeout: const Duration(seconds: 10),
+      );
+      _vin = ObdProtocol.decodeVin(response);
+      if (_vin == null) {
+        _vinError = 'The ECU did not return a valid 17-character VIN.';
+      }
+      return _vin;
+    } catch (error) {
+      _vin = null;
+      _vinError = 'VIN read failed: $error';
+      return null;
+    } finally {
+      _readingVin = false;
+      notifyListeners();
+    }
+  }
+
+"""
+obd_text = obd_text.replace(listener_anchor, vin_reader + listener_anchor, 1)
+obd_service.write_text(obd_text, encoding="utf-8")
+changes.append(str(obd_service.relative_to(project)))
+
+# Localized VIN controls and a compact, scrollable ECU-information card.
+settings_file = project / "lib/core/app_settings.dart"
+settings_text = settings_file.read_text(encoding="utf-8")
+vin_locales = [
+    {
+        "vin_title": "Identification du véhicule (VIN)",
+        "read_vin": "Lire le VIN depuis le calculateur",
+        "vin_not_read": "VIN non lu",
+        "vin_unavailable": "Aucun VIN valide reçu du calculateur.",
+        "vin_demo_unavailable": "Lecture réelle désactivée en mode démo.",
+        "vin_ecu_source": "VIN reçu par OBD-II. Il ne confirme pas à lui seul la motorisation.",
+    },
+    {
+        "vin_title": "Vehicle identification (VIN)",
+        "read_vin": "Read VIN from ECU",
+        "vin_not_read": "VIN not read",
+        "vin_unavailable": "No valid VIN was returned by the ECU.",
+        "vin_demo_unavailable": "Live VIN reading is disabled in demo mode.",
+        "vin_ecu_source": "VIN received over OBD-II. It does not by itself confirm the engine fitment.",
+    },
+    {
+        "vin_title": "معرّف المركبة (VIN)",
+        "read_vin": "قراءة رقم VIN من وحدة التحكم",
+        "vin_not_read": "لم تتم قراءة VIN",
+        "vin_unavailable": "لم تُرجع وحدة التحكم رقم VIN صالحاً.",
+        "vin_demo_unavailable": "قراءة VIN الحقيقية معطلة في الوضع التجريبي.",
+        "vin_ecu_source": "تم استلام VIN عبر OBD-II. ولا يؤكد وحده نوع المحرك.",
+    },
+]
+anchor_matches = list(re.finditer(r"(?m)^(\\s*)'supported_pids'\\s*:\\s*'[^']*',\\s*$", settings_text))
+if len(anchor_matches) != 3:
+    raise RuntimeError("Expected the three locale supported_pids anchors; found " + str(len(anchor_matches)))
+for match, translations in reversed(list(zip(anchor_matches, vin_locales))):
+    indent = match.group(1)
+    lines = [
+        indent + "'" + key + "': " + json.dumps(value, ensure_ascii=False) + ","
+        for key, value in translations.items()
+    ]
+    settings_text = settings_text[:match.end()] + "\\n" + "\\n".join(lines) + settings_text[match.end():]
+settings_file.write_text(settings_text, encoding="utf-8")
+changes.append(str(settings_file.relative_to(project)))
+
+vin_card_method = """  Widget _vinCard(BuildContext context, OBDService obd) {
+    final status = obd.vin ??
+        (obd.isDemo
+            ? tr(context, 'vin_demo_unavailable')
+            : obd.vinError != null
+                ? tr(context, 'vin_unavailable')
+                : tr(context, 'vin_not_read'));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr(context, 'vin_title'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              status,
+              maxLines: 3,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: obd.isDemo || !obd.isInitialized || obd.isReadingVin
+                    ? null
+                    : () => obd.readVin(),
+                icon: obd.isReadingVin
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.badge_outlined),
+                label: Text(
+                  tr(context, 'read_vin'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(context, 'vin_ecu_source'),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+"""
+list_anchor = "            children: [\\n              _section(\\n"
+if vehicle_info_text.count(list_anchor) != 1:
+    raise RuntimeError("VehicleInfo VIN card list insertion anchor changed")
+vehicle_info_text = vehicle_info_text.replace(
+    list_anchor,
+    "            children: [\\n              _vinCard(context, obd),\\n              const SizedBox(height: 14),\\n              _section(\\n",
+    1,
+)
+section_anchor = "  Widget _section(BuildContext context, String title, List<Widget> children) {"
+if vehicle_info_text.count(section_anchor) != 1:
+    raise RuntimeError("VehicleInfo VIN card method insertion anchor changed")
+vehicle_info_text = vehicle_info_text.replace(section_anchor, vin_card_method + section_anchor, 1)
+vehicle_info.write_text(vehicle_info_text, encoding="utf-8")
+changes.append(str(vehicle_info.relative_to(project)))
+
+vin_test = project / "test/vehicle_info_vin_test.dart"
+vin_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/screens/vehicle_info_screen.dart';
+import 'package:torqscan/services/bluetooth_service.dart';
+import 'package:torqscan/services/obd_service.dart';
+
+Future<void> pumpVehicleInfo(
+  WidgetTester tester, {
+  required Size size,
+  required String language,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  final settings = AppSettings()..language = language;
+  final bluetooth = BluetoothService();
+  final obd = OBDService(bluetooth);
+  addTearDown(() {
+    obd.stopDemo();
+    obd.dispose();
+    bluetooth.dispose();
+    settings.dispose();
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+  await obd.startDemo();
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppSettings>.value(value: settings),
+        ChangeNotifierProvider<BluetoothService>.value(value: bluetooth),
+        ChangeNotifierProvider<OBDService>.value(value: obd),
+      ],
+      child: MaterialApp(
+        home: const VehicleInfoScreen(),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(textScaler: const TextScaler.linear(1.35)),
+            child: Directionality(
+              textDirection: language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+              child: child!,
+            ),
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('VIN reader stays disabled in demo mode on a narrow French phone', (tester) async {
+    await pumpVehicleInfo(tester, size: const Size(320, 520), language: 'fr');
+    expect(find.text('Lecture réelle désactivée en mode démo.'), findsOneWidget);
+    final buttonFinder = find.ancestor(
+      of: find.text('Lire le VIN depuis le calculateur'),
+      matching: find.byType(FilledButton),
+    );
+    expect(buttonFinder, findsOneWidget);
+    expect(tester.widget<FilledButton>(buttonFinder).onPressed, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('VIN reader remains scrollable and demo-guarded in Arabic RTL', (tester) async {
+    await pumpVehicleInfo(tester, size: const Size(360, 560), language: 'ar');
+    expect(find.text('قراءة VIN الحقيقية معطلة في الوضع التجريبي.'), findsOneWidget);
+    expect(
+      Directionality.of(tester.element(find.byType(ListView))),
+      TextDirection.rtl,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -260));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+}
+""", encoding="utf-8")
+changes.append(str(vin_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(
+        ["dart", "format", str(protocol_file), str(obd_service), str(settings_file),
+         str(vehicle_info), str(vin_test)],
+        check=True,
+        cwd=project,
+    )
 
 
 report = {

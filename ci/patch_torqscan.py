@@ -3276,13 +3276,13 @@ if __import__('shutil').which('dart'):
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text(encoding="utf-8")
 pubspec_text, version_count = re.subn(
-    r"(?m)^version:\s*1\.4\.12\+36\s*$",
-    "version: 1.4.14+38",
+    r"(?m)^version:\s*1\.4\.14\+38\s*$",
+    "version: 1.4.15+39",
     pubspec_text,
     count=1,
 )
 if version_count != 1:
-    raise RuntimeError("Expected generated version 1.4.12+36 before setting 1.4.14+38")
+    raise RuntimeError("Expected generated version 1.4.14+38 before setting 1.4.15+39")
 pubspec.write_text(pubspec_text, encoding="utf-8")
 changes.append(str(pubspec.relative_to(project)))
 
@@ -3372,24 +3372,97 @@ changes.append(str(dtc_test.relative_to(project)))
 # supplies a VIN and this read does not infer model or engine fitment.
 protocol_file = project / "lib/services/obd_protocol.dart"
 protocol_text = protocol_file.read_text(encoding="utf-8")
-if "static String? decodeVin(String response)" not in protocol_text:
-    vin_decoder = """  static String? decodeVin(String response) {
-    final bytes = findPidData(response, '0902');
-    if (bytes.isEmpty) return null;
-    // Mode 09 PID 02 starts with the number of VIN data items (normally 01).
-    final payload = bytes.first <= 0x20
-        ? bytes.skip(1).take(17).toList()
-        : bytes.take(17).toList();
-    if (payload.length != 17) return null;
-    final vin = String.fromCharCodes(payload).toUpperCase();
-    // ISO 3779 excludes I, O and Q. No North-American-only check digit rule.
+vin_decoder = r"""  static String? decodeVin(String response) {
+    final payload = <int>[];
+    String? sourceCanId;
+    var started = false;
+
+    // ELM327 adapters commonly return VIN as ISO-TP first/consecutive frames.
+    // Keep line boundaries so frame PCI bytes are removed before VIN assembly.
+    for (final rawLine in response.split(RegExp(r'[\r\n]+'))) {
+      var line = rawLine.trim();
+      if (line.isEmpty) continue;
+      line = line
+          .replaceFirst(RegExp(r'^\d+\s*:\s*'), '')
+          .replaceAll('>', '');
+
+      final bytes = <int>[];
+      String? lineCanId;
+      for (final rawToken in line.split(RegExp(r'[\s,]+'))) {
+        final token = rawToken.replaceAll(RegExp(r'[^0-9A-Fa-f]'), '');
+        if (token.isEmpty) continue;
+        // ELM327 may print an 11-bit (7E8) or 29-bit CAN response ID.
+        if ((token.length == 3 || token.length == 8) && bytes.isEmpty) {
+          lineCanId ??= token.toUpperCase();
+          continue;
+        }
+        if (token.length < 2 || token.length.isOdd) continue;
+        for (var offset = 0; offset < token.length; offset += 2) {
+          bytes.add(int.parse(token.substring(offset, offset + 2), radix: 16));
+        }
+      }
+      if (bytes.isEmpty) continue;
+
+      var pidOffset = -1;
+      for (var i = 0; i + 1 < bytes.length; i++) {
+        if (bytes[i] == 0x49 && bytes[i + 1] == 0x02) {
+          pidOffset = i;
+          break;
+        }
+      }
+
+      if (pidOffset >= 0) {
+        if (sourceCanId != null &&
+            lineCanId != null &&
+            lineCanId != sourceCanId) {
+          continue;
+        }
+        sourceCanId ??= lineCanId;
+        final pidData = bytes.skip(pidOffset + 2).toList();
+        // PID 02 includes the number of VIN data records (normally exactly 1).
+        if (pidData.isEmpty || pidData.first != 0x01) return null;
+        payload.addAll(pidData.skip(1));
+        started = true;
+        if (payload.length >= 17) break;
+        continue;
+      }
+
+      if (!started) continue;
+      if (sourceCanId != null &&
+          lineCanId != null &&
+          lineCanId != sourceCanId) {
+        continue;
+      }
+
+      // A consecutive ISO-TP frame has PCI 0x2N followed by up to 7 data bytes.
+      var sequenceOffset = -1;
+      for (var i = 0; i < bytes.length; i++) {
+        if ((bytes[i] & 0xF0) == 0x20) {
+          sequenceOffset = i;
+          break;
+        }
+      }
+      if (sequenceOffset < 0) continue;
+      payload.addAll(bytes.skip(sequenceOffset + 1));
+      if (payload.length >= 17) break;
+    }
+
+    if (payload.length < 17) return null;
+    final vin = String.fromCharCodes(payload.take(17)).toUpperCase();
+    // ISO 3779 excludes I, O and Q. No region-specific check-digit rule.
     return RegExp(r'^[A-HJ-NPR-Z0-9]{17}$').hasMatch(vin) ? vin : null;
   }
-
 """
-    class_end = protocol_text.rfind("\n}")
-    if class_end < 0:
-        raise RuntimeError("OBD protocol class closing anchor missing for VIN decoder")
+decoder_marker = "  static String? decodeVin(String response) {"
+class_end = protocol_text.rfind("\n}")
+if class_end < 0:
+    raise RuntimeError("OBD protocol class closing anchor missing for VIN decoder")
+existing_decoder = protocol_text.find(decoder_marker)
+if existing_decoder >= 0:
+    if existing_decoder > class_end:
+        raise RuntimeError("Existing VIN decoder is outside the OBD protocol class")
+    protocol_text = protocol_text[:existing_decoder] + vin_decoder + protocol_text[class_end:]
+else:
     protocol_text = protocol_text[:class_end] + "\n" + vin_decoder + protocol_text[class_end:]
 protocol_file.write_text(protocol_text, encoding="utf-8")
 changes.append(str(protocol_file.relative_to(project)))
@@ -3677,15 +3750,80 @@ changes.append(str(vin_test.relative_to(project)))
 if __import__('shutil').which('dart'):
     subprocess.run(
         ["dart", "format", str(protocol_file), str(obd_service), str(settings_file),
-         str(vehicle_info), str(vin_test)],
+         str(vehicle_info), str(vin_test), str(vin_protocol_test)],
         check=True,
         cwd=project,
     )
 
 
+# VIN protocol regression tests: real OBD-II responses commonly span multiple
+# ISO-TP CAN frames. A partial first frame must never be accepted as a VIN.
+vin_protocol_test = project / "test/vin_protocol_test.dart"
+vin_protocol_test.write_text("""import 'package:flutter_test/flutter_test.dart';
+import 'package:torqscan/services/obd_protocol.dart';
+
+void main() {
+  group('SAE J1979 VIN decoding', () {
+    test('decodes a complete single-line Mode 09 PID 02 response', () {
+      expect(
+        ObdProtocol.decodeVin(
+          '49 02 01 31 48 47 43 4D 38 32 36 33 33 41 30 30 34 33 35 32',
+        ),
+        '1HGCM82633A004352',
+      );
+    });
+
+    test('reassembles a three-frame ISO-TP VIN from one ECU', () {
+      const response = '7E8 10 14 49 02 01 31 48 47\r\n'
+          '7E8 21 43 4D 38 32 36 33 33\r\n'
+          '7E8 22 41 30 30 34 33 35 32';
+      expect(ObdProtocol.decodeVin(response), '1HGCM82633A004352');
+    });
+
+    test('supports ELM327 numbered frame lines without CAN headers', () {
+      const response = '0: 10 14 49 02 01 31 48 47\r\n'
+          '1: 21 43 4D 38 32 36 33 33\r\n'
+          '2: 22 41 30 30 34 33 35 32';
+      expect(ObdProtocol.decodeVin(response), '1HGCM82633A004352');
+    });
+
+    test('does not mix consecutive frames from different ECUs', () {
+      const response = '7E8 10 14 49 02 01 31 48 47\r\n'
+          '7E9 21 58 58 58 58 58 58 58\r\n'
+          '7E8 21 43 4D 38 32 36 33 33\r\n'
+          '7E8 22 41 30 30 34 33 35 32';
+      expect(ObdProtocol.decodeVin(response), '1HGCM82633A004352');
+    });
+
+    test('rejects incomplete ISO-TP payloads', () {
+      const response = '7E8 10 14 49 02 01 31 48 47\r\n'
+          '7E8 21 43 4D 38 32 36 33 33';
+      expect(ObdProtocol.decodeVin(response), isNull);
+    });
+
+    test('rejects invalid VIN characters and multiple VIN records', () {
+      expect(
+        ObdProtocol.decodeVin(
+          '49 02 01 31 49 47 43 4D 38 32 36 33 33 41 30 30 34 33 35 32',
+        ),
+        isNull,
+      );
+      expect(
+        ObdProtocol.decodeVin(
+          '49 02 02 31 48 47 43 4D 38 32 36 33 33 41 30 30 34 33 35 32',
+        ),
+        isNull,
+      );
+    });
+  });
+}
+""", encoding="utf-8")
+changes.append(str(vin_protocol_test.relative_to(project)))
+
+
 report = {
-    "patch": "torqscan-vin-read-responsive-info-v1",
-    "vin_decoder": "SAE J1979 Mode 09 PID 02; 17-character ISO 3779 validation; no automatic engine fitment",
+    "patch": "torqscan-vin-isotp-reassembly-v1",
+    "vin_decoder": "SAE J1979 Mode 09 PID 02; ISO-TP multi-frame reassembly across ELM327 lines; ECU-ID isolation; 17-character ISO 3779 validation; no automatic engine fitment",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

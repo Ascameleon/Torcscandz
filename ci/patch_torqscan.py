@@ -3340,19 +3340,25 @@ dtc_file.write_text(dtc_text, encoding="utf-8")
 
 dtc_test = project / "test/dtc_demo_guard_test.dart"
 dtc_test_text = dtc_test.read_text(encoding="utf-8")
-old_pending_expectation = """    expect(find.text('P0301'), findsOneWidget);
-    expect(find.text('مسح الأكواد'), findsNothing);
-    await tester.drag(find.byType(ListView), const Offset(0, -260));
-    await tester.pumpAndSettle();
-"""
-new_pending_expectation = """    await tester.drag(find.byType(ListView), const Offset(0, -700));
-    await tester.pumpAndSettle();
-    expect(find.text('P0301'), findsOneWidget);
-    expect(find.text('مسح الأكواد'), findsNothing);
-"""
-if dtc_test_text.count(old_pending_expectation) != 1:
-    raise RuntimeError("Arabic DTC pending-code visibility test anchor changed")
-dtc_test_text = dtc_test_text.replace(old_pending_expectation, new_pending_expectation, 1)
+pending_anchor = "    expect(find.text('P0301'), findsOneWidget);"
+if dtc_test_text.count(pending_anchor) != 1:
+    raise RuntimeError("Arabic DTC pending-code expectation anchor changed")
+dtc_test_text = dtc_test_text.replace(
+    pending_anchor,
+    "    await tester.drag(find.byType(ListView), const Offset(0, -700));\n"
+    "    await tester.pumpAndSettle();\n" + pending_anchor,
+    1,
+)
+diagnostic_anchor = "  expect(tester.takeException(), isNull);"
+if dtc_test_text.count(diagnostic_anchor) != 1:
+    raise RuntimeError("DTC layout diagnostic assertion anchor changed")
+dtc_test_text = dtc_test_text.replace(
+    diagnostic_anchor,
+    "  final layoutError = tester.takeException();\n"
+    "  if (layoutError != null) debugPrint('DTC_LAYOUT_EXCEPTION: $layoutError');\n"
+    "  expect(layoutError, isNull);",
+    1,
+)
 dtc_test.write_text(dtc_test_text, encoding="utf-8")
 if __import__('shutil').which('dart'):
     subprocess.run(["dart", "format", str(dtc_file), str(dtc_test)], check=True, cwd=project)

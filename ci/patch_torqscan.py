@@ -2653,6 +2653,369 @@ void main() {
 """, encoding="utf-8")
 changes.append(str(safety_test.relative_to(project)))
 
+
+# Persist the complete selected vehicle profile and add an explicit model-year choice.
+pubspec = project / "pubspec.yaml"
+pubspec_text = pubspec.read_text(encoding="utf-8")
+if "shared_preferences:" not in pubspec_text:
+    provider_line = re.search(r"(?m)^  provider:\s*[^\n]+$", pubspec_text)
+    if provider_line is None:
+        raise RuntimeError("Provider dependency anchor missing for profile persistence")
+    pubspec_text = pubspec_text[:provider_line.end()] + "\n  shared_preferences: ^2.5.3" + pubspec_text[provider_line.end():]
+pubspec.write_text(pubspec_text, encoding="utf-8")
+changes.append(str(pubspec.relative_to(project)))
+
+settings_file = project / "lib/core/app_settings.dart"
+settings_text = settings_file.read_text(encoding="utf-8")
+if "package:shared_preferences/shared_preferences.dart" not in settings_text:
+    settings_text = settings_text.replace(
+        "import 'package:flutter/material.dart';",
+        "import 'package:flutter/material.dart';\nimport 'package:shared_preferences/shared_preferences.dart';",
+        1,
+    )
+if "int? selectedModelYear;" not in settings_text:
+    settings_text = settings_text.replace(
+        "  String? selectedEngineId;\n",
+        "  String? selectedEngineId;\n  int? selectedModelYear;\n  String selectedFuelFilter = 'all';\n",
+        1,
+    )
+profile_methods = """  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    selectedVehicleId = prefs.getString('torqscan.vehicle_id');
+    selectedEngineId = prefs.getString('torqscan.engine_id');
+    selectedModelYear = prefs.getInt('torqscan.model_year');
+    const supportedFuelFilters = {'all', 'petrol', 'diesel', 'lpg', 'hybrid', 'electric', 'other'};
+    final savedFilter = prefs.getString('torqscan.fuel_filter') ?? 'all';
+    selectedFuelFilter = supportedFuelFilters.contains(savedFilter) ? savedFilter : 'all';
+  }
+
+  Future<void> setVehicle(
+    String? id, {
+    String? engineId,
+    int? modelYear,
+  }) async {
+    selectedVehicleId = id;
+    selectedEngineId = id == null ? null : engineId;
+    selectedModelYear = id == null ? null : modelYear;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    if (id == null) {
+      await prefs.remove('torqscan.vehicle_id');
+      await prefs.remove('torqscan.engine_id');
+      await prefs.remove('torqscan.model_year');
+    } else {
+      await prefs.setString('torqscan.vehicle_id', id);
+      if (engineId == null) {
+        await prefs.remove('torqscan.engine_id');
+      } else {
+        await prefs.setString('torqscan.engine_id', engineId);
+      }
+      if (modelYear == null) {
+        await prefs.remove('torqscan.model_year');
+      } else {
+        await prefs.setInt('torqscan.model_year', modelYear);
+      }
+    }
+  }
+
+  Future<void> setFuelFilter(String value) async {
+    const supportedFuelFilters = {'all', 'petrol', 'diesel', 'lpg', 'hybrid', 'electric', 'other'};
+    if (!supportedFuelFilters.contains(value)) return;
+    selectedFuelFilter = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('torqscan.fuel_filter', value);
+  }
+
+"""
+if "Future<void> load() async {" not in settings_text:
+    anchor = "  bool get isArabic => language == 'ar';\n"
+    if settings_text.count(anchor) != 1:
+        raise RuntimeError("AppSettings profile-method insertion point missing")
+    settings_text = settings_text.replace(anchor, profile_methods + anchor, 1)
+old_set_vehicle = """  void setVehicle(String? id, {String? engineId}) {
+    selectedVehicleId = id;
+    selectedEngineId = engineId;
+    notifyListeners();
+  }
+"""
+if old_set_vehicle in settings_text:
+    settings_text = settings_text.replace(old_set_vehicle, "", 1)
+if "Future<void> setVehicle(" not in settings_text or "Future<void> setFuelFilter(" not in settings_text:
+    raise RuntimeError("Persistent AppSettings methods were not installed")
+settings_file.write_text(settings_text, encoding="utf-8")
+changes.append(str(settings_file.relative_to(project)))
+
+main_file = project / "lib/main.dart"
+main_text = main_file.read_text(encoding="utf-8")
+old_main = """void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations(
+    const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
+  );
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AppSettings(),
+      child: const TorqScanApp(),
+    ),
+  );
+}
+"""
+new_main = """Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations(
+    const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
+  );
+  final settings = AppSettings();
+  try {
+    await settings.load();
+  } catch (_) {
+    // Start with safe defaults if local preference storage is unavailable.
+  }
+  runApp(
+    ChangeNotifierProvider.value(
+      value: settings,
+      child: const TorqScanApp(),
+    ),
+  );
+}
+"""
+if old_main not in main_text:
+    raise RuntimeError("Main initialization anchor missing for profile restoration")
+main_file.write_text(main_text.replace(old_main, new_main, 1), encoding="utf-8")
+changes.append(str(main_file.relative_to(project)))
+
+vehicle_file = project / "lib/models/vehicle.dart"
+vehicle_source = vehicle_file.read_text(encoding="utf-8")
+if "static List<int> modelYearsFor" not in vehicle_source:
+    year_method = """  static List<int> modelYearsFor(VehicleModel vehicle) {
+    final match = RegExp(r'(\\\\d{4})\\\\s*[–-]\\\\s*(\\\\d{4})').firstMatch(vehicle.year);
+    if (match == null) return const [];
+    final first = int.parse(match.group(1)!);
+    final last = int.parse(match.group(2)!);
+    if (last < first || last - first > 80) return const [];
+    return [for (var year = last; year >= first; year--) year];
+  }
+
+"""
+    anchor = "  static Set<String> fuelTypesForEngine(String label) {\n"
+    if vehicle_source.count(anchor) != 1:
+        raise RuntimeError("Vehicle model-year helper insertion point missing")
+    vehicle_source = vehicle_source.replace(anchor, year_method + anchor, 1)
+vehicle_file.write_text(vehicle_source, encoding="utf-8")
+changes.append(str(vehicle_file.relative_to(project)))
+
+settings_text = settings_file.read_text(encoding="utf-8")
+locale_year_keys = [
+    ("'catalog_engine': 'Motorisation', 'catalog_disclaimer':",
+     "'catalog_engine': 'Motorisation', 'catalog_model_year': 'Année du modèle', 'catalog_disclaimer':"),
+    ("'catalog_engine': 'Engine', 'catalog_disclaimer':",
+     "'catalog_engine': 'Engine', 'catalog_model_year': 'Model year', 'catalog_disclaimer':"),
+    ("'catalog_engine': 'المحرك', 'catalog_disclaimer':",
+     "'catalog_engine': 'المحرك', 'catalog_model_year': 'سنة الطراز', 'catalog_disclaimer':"),
+]
+for source_text, replacement_text in locale_year_keys:
+    if source_text not in settings_text:
+        raise RuntimeError("Model-year localization anchor missing: " + source_text)
+    settings_text = settings_text.replace(source_text, replacement_text, 1)
+settings_file.write_text(settings_text, encoding="utf-8")
+
+selector_file = project / "lib/screens/vehicle_selector_screen.dart"
+selector_text = selector_file.read_text(encoding="utf-8")
+selector_text = selector_text.replace(
+    "  String _fuelType = 'all';\n",
+    "  String _fuelType = 'all';\n  int? _selectedYear;\n",
+    1,
+)
+selector_text = selector_text.replace(
+    "    _selected = VehicleCatalog.byId(settings.selectedVehicleId);\n    _selectedEngine = settings.selectedEngineId;\n",
+    """    _fuelType = settings.selectedFuelFilter;
+    _selected = VehicleCatalog.byId(settings.selectedVehicleId);
+    if (_selected != null && !VehicleCatalog.matchesFuelType(_selected!, _fuelType)) {
+      _selected = null;
+    }
+    _selectedEngine = settings.selectedEngineId;
+    _selectedYear = settings.selectedModelYear;
+    if (_selected != null) {
+      final years = VehicleCatalog.modelYearsFor(_selected!);
+      if (years.isNotEmpty && !years.contains(_selectedYear)) _selectedYear = years.first;
+      if (years.isEmpty) _selectedYear = null;
+    }
+""",
+    1,
+)
+old_filter_callback = """            onChanged: (type) => setState(() {
+              _fuelType = type ?? 'all';
+              if (_selected != null) {
+                final options = _engineOptionsFor(_selected!);
+                if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
+              }
+            }),
+"""
+new_filter_callback = """            onChanged: (type) async {
+              final nextFilter = type ?? 'all';
+              final clearVehicle = _selected != null &&
+                  !VehicleCatalog.matchesFuelType(_selected!, nextFilter);
+              setState(() {
+                _fuelType = nextFilter;
+                if (clearVehicle) {
+                  _selected = null;
+                  _selectedEngine = null;
+                  _selectedYear = null;
+                } else if (_selected != null) {
+                  final options = _engineOptionsFor(_selected!);
+                  if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
+                }
+              });
+              final settings = context.read<AppSettings>();
+              await settings.setFuelFilter(nextFilter);
+              if (clearVehicle) await settings.setVehicle(null);
+            },
+"""
+if old_filter_callback not in selector_text:
+    raise RuntimeError("Fuel-filter callback anchor changed before profile persistence patch")
+selector_text = selector_text.replace(old_filter_callback, new_filter_callback, 1)
+
+old_save_callback = """              onPressed: _selected == null || _selectedEngine == null ? null : () {
+                context.read<AppSettings>().setVehicle(_selected!.id, engineId: _selectedEngine);
+                Navigator.pop(context, _selected);
+              },
+"""
+new_save_callback = """              onPressed: _selected == null || _selectedEngine == null ? null : () async {
+                final selected = _selected!;
+                await context.read<AppSettings>().setVehicle(
+                  selected.id,
+                  engineId: _selectedEngine,
+                  modelYear: _selectedYear,
+                );
+                if (!context.mounted) return;
+                Navigator.pop(context, selected);
+              },
+"""
+if old_save_callback not in selector_text:
+    raise RuntimeError("Vehicle profile save callback anchor missing")
+selector_text = selector_text.replace(old_save_callback, new_save_callback, 1)
+
+year_dropdown = """            if (VehicleCatalog.modelYearsFor(_selected!).isNotEmpty) ...[
+              DropdownButtonFormField<int>(
+                key: ValueKey('model-year-' + _selected!.id),
+                isExpanded: true,
+                value: _selectedYear,
+                decoration: InputDecoration(
+                  labelText: tr(context, 'catalog_model_year'),
+                  prefixIcon: const Icon(Icons.calendar_month_outlined),
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+                items: VehicleCatalog.modelYearsFor(_selected!).map((year) =>
+                  DropdownMenuItem<int>(value: year, child: Text(year.toString()))
+                ).toList(),
+                onChanged: (year) => setState(() => _selectedYear = year),
+              ),
+              const SizedBox(height: 8),
+            ],
+"""
+engine_anchor = """            const SizedBox(height: 6),
+            DropdownButtonFormField<String>(
+              key: ValueKey('engine-' + _selected!.id),
+"""
+if selector_text.count(engine_anchor) != 1:
+    raise RuntimeError("Engine dropdown insertion point missing for model year")
+selector_text = selector_text.replace(
+    engine_anchor,
+    """            const SizedBox(height: 6),
+""" + year_dropdown + """            DropdownButtonFormField<String>(
+              key: ValueKey('engine-' + _selected!.id),
+""",
+    1,
+)
+old_card_tap = "onTap: () => setState(() { _selected = v; _selectedEngine = _engineOptionsFor(v).first; }),"
+new_card_tap = """onTap: () => setState(() {
+        _selected = v;
+        _selectedEngine = _engineOptionsFor(v).first;
+        final years = VehicleCatalog.modelYearsFor(v);
+        _selectedYear = years.isEmpty ? null : years.first;
+      }),"""
+if old_card_tap not in selector_text:
+    raise RuntimeError("Vehicle card selection callback anchor missing")
+selector_text = selector_text.replace(old_card_tap, new_card_tap, 1)
+selector_file.write_text(selector_text, encoding="utf-8")
+changes.append(str(selector_file.relative_to(project)))
+
+profile_test = project / "test/vehicle_profile_persistence_test.dart"
+profile_test.write_text("""import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/models/vehicle.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  test('model-year options are bounded by the catalogue generation range', () {
+    final peugeot = VehicleCatalog.byId('peugeot_208')!;
+    final years = VehicleCatalog.modelYearsFor(peugeot);
+    expect(years.first, 2026);
+    expect(years.last, 2012);
+    expect(years, contains(2020));
+    expect(VehicleCatalog.modelYearsFor(VehicleCatalog.byId('generic_obd')!), isEmpty);
+  });
+
+  test('selected vehicle, engine, year and fuel filter survive app restart', () async {
+    final first = AppSettings();
+    await first.load();
+    await first.setVehicle(
+      'peugeot_208',
+      engineId: '1.2 PureTech essence',
+      modelYear: 2024,
+    );
+    await first.setFuelFilter('petrol');
+
+    final restored = AppSettings();
+    await restored.load();
+    expect(restored.selectedVehicleId, 'peugeot_208');
+    expect(restored.selectedEngineId, '1.2 PureTech essence');
+    expect(restored.selectedModelYear, 2024);
+    expect(restored.selectedFuelFilter, 'petrol');
+  });
+
+  test('clearing the selected vehicle removes its persisted engine and year', () async {
+    final settings = AppSettings();
+    await settings.setVehicle(
+      'vw_golf',
+      engineId: '2.0 TDI diesel',
+      modelYear: 2023,
+    );
+    await settings.setVehicle(null);
+    final restored = AppSettings();
+    await restored.load();
+    expect(restored.selectedVehicleId, isNull);
+    expect(restored.selectedEngineId, isNull);
+    expect(restored.selectedModelYear, isNull);
+  });
+
+  test('unsupported fuel filters cannot replace a valid saved filter', () async {
+    final settings = AppSettings();
+    await settings.setFuelFilter('diesel');
+    await settings.setFuelFilter('reactor');
+    final restored = AppSettings();
+    await restored.load();
+    expect(restored.selectedFuelFilter, 'diesel');
+  });
+}
+""", encoding="utf-8")
+changes.append(str(profile_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(
+        ["dart", "format", str(vehicle_file), str(selector_file), str(settings_file), str(main_file), str(profile_test), str(safety_test)],
+        check=True,
+        cwd=project,
+    )
+
 if __import__('shutil').which('dart'):
     subprocess.run(
         ["dart", "format", str(vehicle_file), str(selector_file), str(safety_test)],
@@ -2664,7 +3027,7 @@ pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text(encoding="utf-8")
 pubspec_text, version_count = re.subn(
     r"(?m)^version:\s*1\.4\.10\+34\s*$",
-    "version: 1.4.11+35",
+    "version: 1.4.12+36",
     pubspec_text,
     count=1,
 )
@@ -2675,7 +3038,7 @@ changes.append(str(pubspec.relative_to(project)))
 
 
 report = {
-    "patch": "torqscan-fuel-filter-precision-v4",
+    "patch": "torqscan-persisted-vehicle-profile-v1",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

@@ -2480,19 +2480,28 @@ changes.append(str(pubspec.relative_to(project)))
 
 
 
+
 # Tighten fuel-family classification and invalidate a selected vehicle when
 # the user changes to a fuel filter that the vehicle cannot satisfy.
 vehicle_file = project / "lib" / "models" / "vehicle.dart"
 vehicle_text = vehicle_file.read_text(encoding="utf-8")
-old_petrol = """    if (containsAny([
-      'essence', 'petrol', 'gasoline', 'tsi', 'tfsi', 'tce', 'puretech',
-      'ecoboost', 'vtec', 'gdi', 'tgdi', 'mpi', 'skyactiv-g', 'skyactiv-x',
-      'firefly', 'multiair', 'boosterjet', 'vvt', 'turbo', 'flat-six',
-      'boxer', 'v6', 'v8', 'gt3', 'atmospherique',
-    ])) {
-      types.add('petrol');
-    }
-"""
+
+def replace_fuel_classifier_block(source, fuel_type, replacement):
+    pattern = re.compile(
+        r"(?ms)^[ \t]*if\s*\(containsAny\(\[\n.*?^[ \t]*\}\n"
+    )
+    matches = [
+        match for match in pattern.finditer(source)
+        if "types.add('" + fuel_type + "')" in match.group(0)
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            "Expected one formatted " + fuel_type + " classifier block; found "
+            + str(len(matches))
+        )
+    match = matches[0]
+    return source[:match.start()] + replacement + source[match.end():]
+
 new_petrol = """    if (containsAny([
       'essence', 'petrol', 'gasoline', 'tsi', 'tfsi', 'tce', 'puretech',
       'ecoboost', 'vtec', 'gdi', 'tgdi', 'mpi', 'skyactiv-g', 'skyactiv-x',
@@ -2501,16 +2510,6 @@ new_petrol = """    if (containsAny([
       'fsi', 'hpi', 'gt3', 'atmospherique',
     ])) {
       types.add('petrol');
-    }
-"""
-if old_petrol not in vehicle_text:
-    raise RuntimeError("Fuel classifier petrol-token block changed; refusing an unverified patch")
-vehicle_text = vehicle_text.replace(old_petrol, new_petrol, 1)
-old_diesel = """    if (containsAny([
-      'diesel', 'dci', 'tdi', 'hdi', 'bluehdi', 'tdci', 'ecoblue',
-      'crdi', 'multijet', 'tddi', 'cdti', 'di-d', 'd-4d',
-    ])) {
-      types.add('diesel');
     }
 """
 new_diesel = """    if (containsAny([
@@ -2522,23 +2521,20 @@ new_diesel = """    if (containsAny([
       types.add('diesel');
     }
 """
-if old_diesel not in vehicle_text:
-    raise RuntimeError("Fuel classifier diesel-token block changed; refusing an unverified patch")
-vehicle_text = vehicle_text.replace(old_diesel, new_diesel, 1)
+vehicle_text = replace_fuel_classifier_block(vehicle_text, "petrol", new_petrol)
+vehicle_text = replace_fuel_classifier_block(vehicle_text, "diesel", new_diesel)
 vehicle_file.write_text(vehicle_text, encoding="utf-8")
 changes.append(str(vehicle_file.relative_to(project)))
 
 selector_file = project / "lib" / "screens" / "vehicle_selector_screen.dart"
 selector_text = selector_file.read_text(encoding="utf-8")
-old_options = """  List<String> _engineOptionsFor(VehicleModel vehicle) {
-    if (_fuelType == 'all' || _fuelType == 'other') return vehicle.engines;
-    final matching = vehicle.engines
-        .where((engine) => VehicleCatalog.fuelTypesForEngine(engine).contains(_fuelType))
-        .toList();
-    return matching.isEmpty ? vehicle.engines : matching;
-  }
-"""
-new_options = """  List<String> _engineOptionsFor(VehicleModel vehicle) {
+method_pattern = re.compile(
+    r"(?ms)^  List<String> _engineOptionsFor\(VehicleModel vehicle\) \{\n.*?^  \}\n"
+)
+method_matches = list(method_pattern.finditer(selector_text))
+if len(method_matches) != 1:
+    raise RuntimeError("Expected one formatted engine-option method; found " + str(len(method_matches)))
+new_method = """  List<String> _engineOptionsFor(VehicleModel vehicle) {
     if (_fuelType == 'all') return vehicle.engines;
     if (_fuelType == 'other') {
       return vehicle.id == 'generic_obd' ? vehicle.engines : <String>[];
@@ -2548,18 +2544,16 @@ new_options = """  List<String> _engineOptionsFor(VehicleModel vehicle) {
         .toList();
   }
 """
-if old_options not in selector_text:
-    raise RuntimeError("Vehicle engine filter method changed; refusing an unverified patch")
-selector_text = selector_text.replace(old_options, new_options, 1)
-old_filter_change = """            onChanged: (type) => setState(() {
-              _fuelType = type ?? 'all';
-              if (_selected != null) {
-                final options = _engineOptionsFor(_selected!);
-                if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
-              }
-            }),
-"""
-new_filter_change = """            onChanged: (type) => setState(() {
+m = method_matches[0]
+selector_text = selector_text[:m.start()] + new_method + selector_text[m.end():]
+
+callback_pattern = re.compile(
+    r"(?ms)^            onChanged: \(type\) => setState\(\(\) \{\n.*?^            \}\),\n"
+)
+callback_matches = list(callback_pattern.finditer(selector_text))
+if len(callback_matches) != 1:
+    raise RuntimeError("Expected one fuel-filter callback; found " + str(len(callback_matches)))
+new_callback = """            onChanged: (type) => setState(() {
               _fuelType = type ?? 'all';
               if (_selected != null &&
                   !VehicleCatalog.matchesFuelType(_selected!, _fuelType)) {
@@ -2573,9 +2567,8 @@ new_filter_change = """            onChanged: (type) => setState(() {
               }
             }),
 """
-if old_filter_change not in selector_text:
-    raise RuntimeError("Vehicle fuel-filter callback changed; refusing an unverified patch")
-selector_text = selector_text.replace(old_filter_change, new_filter_change, 1)
+m = callback_matches[0]
+selector_text = selector_text[:m.start()] + new_callback + selector_text[m.end():]
 selector_file.write_text(selector_text, encoding="utf-8")
 changes.append(str(selector_file.relative_to(project)))
 
@@ -2671,13 +2664,13 @@ pubspec_text, version_count = re.subn(
     count=1,
 )
 if version_count != 1:
-    raise RuntimeError("Expected the generated release version 1.4.10+34 before setting 1.4.11+35")
+    raise RuntimeError("Expected generated release version 1.4.10+34 before setting 1.4.11+35")
 pubspec.write_text(pubspec_text, encoding="utf-8")
 changes.append(str(pubspec.relative_to(project)))
 
 
 report = {
-    "patch": "torqscan-fuel-filter-precision-v2",
+    "patch": "torqscan-fuel-filter-precision-v3",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

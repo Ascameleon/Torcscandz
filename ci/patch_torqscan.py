@@ -2547,28 +2547,33 @@ new_method = """  List<String> _engineOptionsFor(VehicleModel vehicle) {
 m = method_matches[0]
 selector_text = selector_text[:m.start()] + new_method + selector_text[m.end():]
 
-callback_pattern = re.compile(
-    r"(?ms)^            onChanged: \(type\) => setState\(\(\) \{\n.*?^            \}\),\n"
-)
-callback_matches = list(callback_pattern.finditer(selector_text))
-if len(callback_matches) != 1:
-    raise RuntimeError("Expected one fuel-filter callback; found " + str(len(callback_matches)))
-new_callback = """            onChanged: (type) => setState(() {
-              _fuelType = type ?? 'all';
-              if (_selected != null &&
-                  !VehicleCatalog.matchesFuelType(_selected!, _fuelType)) {
-                _selected = null;
-                _selectedEngine = null;
-              } else if (_selected != null) {
-                final options = _engineOptionsFor(_selected!);
-                if (options.isNotEmpty && !options.contains(_selectedEngine)) {
-                  _selectedEngine = options.first;
-                }
-              }
-            }),
+
+callback_start = selector_text.find("onChanged: (type)")
+if callback_start < 0:
+    raise RuntimeError("Fuel-filter onChanged callback was not found in the generated selector")
+callback_end = selector_text.find("}),", callback_start)
+if callback_end < 0:
+    raise RuntimeError("Fuel-filter callback closing delimiter was not found")
+line_start = selector_text.rfind("\n", 0, callback_start) + 1
+line_end = selector_text.find("\n", callback_end)
+if line_end < 0:
+    raise RuntimeError("Fuel-filter callback line ending was not found")
+indent = selector_text[line_start:callback_start]
+new_callback = indent + """onChanged: (type) => setState(() {
+""" + indent + """  _fuelType = type ?? 'all';
+""" + indent + """  if (_selected != null &&
+""" + indent + """      !VehicleCatalog.matchesFuelType(_selected!, _fuelType)) {
+""" + indent + """    _selected = null;
+""" + indent + """    _selectedEngine = null;
+""" + indent + """  } else if (_selected != null) {
+""" + indent + """    final options = _engineOptionsFor(_selected!);
+""" + indent + """    if (options.isNotEmpty && !options.contains(_selectedEngine)) {
+""" + indent + """      _selectedEngine = options.first;
+""" + indent + """    }
+""" + indent + """  }
+""" + indent + """}),
 """
-m = callback_matches[0]
-selector_text = selector_text[:m.start()] + new_callback + selector_text[m.end():]
+selector_text = selector_text[:line_start] + new_callback + selector_text[line_end + 1:]
 selector_file.write_text(selector_text, encoding="utf-8")
 changes.append(str(selector_file.relative_to(project)))
 
@@ -2670,7 +2675,7 @@ changes.append(str(pubspec.relative_to(project)))
 
 
 report = {
-    "patch": "torqscan-fuel-filter-precision-v3",
+    "patch": "torqscan-fuel-filter-precision-v4",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

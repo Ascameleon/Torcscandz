@@ -2933,16 +2933,26 @@ if engine_dropdown_start < 0:
     raise RuntimeError("Engine dropdown widget was not found for model-year insertion")
 engine_line_start = selector_text.rfind("\n", 0, engine_dropdown_start) + 1
 selector_text = selector_text[:engine_line_start] + year_dropdown + selector_text[engine_line_start:]
-old_card_tap = "onTap: () => setState(() { _selected = v; _selectedEngine = _engineOptionsFor(v).first; }),"
+card_method_start = selector_text.find("Widget _vehicleCard(")
+if card_method_start < 0:
+    raise RuntimeError("Vehicle card builder was not found")
+card_tail = selector_text[card_method_start:]
 new_card_tap = """onTap: () => setState(() {
         _selected = v;
         _selectedEngine = _engineOptionsFor(v).first;
         final years = VehicleCatalog.modelYearsFor(v);
         _selectedYear = years.isEmpty ? null : years.first;
       }),"""
-if old_card_tap not in selector_text:
-    raise RuntimeError("Vehicle card selection callback anchor missing")
-selector_text = selector_text.replace(old_card_tap, new_card_tap, 1)
+card_tail, card_tap_count = re.subn(
+    r"onTap:\s*\(\)\s*=>\s*setState\(\(\)\s*\{.*?\}\),",
+    lambda _: new_card_tap,
+    card_tail,
+    count=1,
+    flags=re.S,
+)
+if card_tap_count != 1:
+    raise RuntimeError("Vehicle card tap callback could not be updated for model-year selection")
+selector_text = selector_text[:card_method_start] + card_tail
 selector_file.write_text(selector_text, encoding="utf-8")
 changes.append(str(selector_file.relative_to(project)))
 

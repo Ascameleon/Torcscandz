@@ -2793,7 +2793,7 @@ vehicle_file = project / "lib/models/vehicle.dart"
 vehicle_source = vehicle_file.read_text(encoding="utf-8")
 if "static List<int> modelYearsFor" not in vehicle_source:
     year_method = """  static List<int> modelYearsFor(VehicleModel vehicle) {
-    final match = RegExp(r'(\\\\d{4})\\\\s*[–-]\\\\s*(\\\\d{4})').firstMatch(vehicle.year);
+    final match = RegExp(r'(\\d{4})\\s*[–-]\\s*(\\d{4})').firstMatch(vehicle.year);
     if (match == null) return const [];
     final first = int.parse(match.group(1)!);
     final last = int.parse(match.group(2)!);

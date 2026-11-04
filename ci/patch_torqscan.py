@@ -2925,20 +2925,14 @@ year_dropdown = """            if (VehicleCatalog.modelYearsFor(_selected!).isNo
               const SizedBox(height: 8),
             ],
 """
-engine_anchor = """            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              key: ValueKey('engine-' + _selected!.id),
-"""
-if selector_text.count(engine_anchor) != 1:
-    raise RuntimeError("Engine dropdown insertion point missing for model year")
-selector_text = selector_text.replace(
-    engine_anchor,
-    """            const SizedBox(height: 6),
-""" + year_dropdown + """            DropdownButtonFormField<String>(
-              key: ValueKey('engine-' + _selected!.id),
-""",
-    1,
-)
+engine_key_index = selector_text.find("key: ValueKey('engine-' + _selected!.id)")
+if engine_key_index < 0:
+    raise RuntimeError("Engine dropdown key was not found for model-year insertion")
+engine_dropdown_start = selector_text.rfind("DropdownButtonFormField<String>(", 0, engine_key_index)
+if engine_dropdown_start < 0:
+    raise RuntimeError("Engine dropdown widget was not found for model-year insertion")
+engine_line_start = selector_text.rfind("\n", 0, engine_dropdown_start) + 1
+selector_text = selector_text[:engine_line_start] + year_dropdown + selector_text[engine_line_start:]
 old_card_tap = "onTap: () => setState(() { _selected = v; _selectedEngine = _engineOptionsFor(v).first; }),"
 new_card_tap = """onTap: () => setState(() {
         _selected = v;

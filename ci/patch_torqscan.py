@@ -3350,7 +3350,7 @@ dtc_test_text = dtc_test_text.replace(
     1,
 )
 diagnostic_anchor = "  expect(tester.takeException(), isNull);"
-if dtc_test_text.count(diagnostic_anchor) != 1:
+if diagnostic_anchor not in dtc_test_text:
     raise RuntimeError("DTC layout diagnostic assertion anchor changed")
 dtc_test_text = dtc_test_text.replace(
     diagnostic_anchor,

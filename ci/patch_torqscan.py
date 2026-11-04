@@ -2884,25 +2884,27 @@ new_callback = indent + """onChanged: (type) async {
 """
 selector_text = selector_text[:line_start] + new_callback + selector_text[line_end + 1:]
 
-old_save_callback = """              onPressed: _selected == null || _selectedEngine == null ? null : () {
-                context.read<AppSettings>().setVehicle(_selected!.id, engineId: _selectedEngine);
-                Navigator.pop(context, _selected);
-              },
+save_start = selector_text.find("onPressed: _selected == null")
+if save_start < 0:
+    raise RuntimeError("Vehicle profile save action was not found")
+icon_start = selector_text.find("icon: const Icon(Icons.check)", save_start)
+if icon_start < 0:
+    raise RuntimeError("Vehicle profile save action icon was not found")
+save_line_start = selector_text.rfind("\n", 0, save_start) + 1
+icon_line_start = selector_text.rfind("\n", 0, icon_start) + 1
+save_indent = selector_text[save_line_start:save_start]
+new_save_callback = save_indent + """onPressed: _selected == null || _selectedEngine == null ? null : () async {
+""" + save_indent + """  final selected = _selected!;
+""" + save_indent + """  await context.read<AppSettings>().setVehicle(
+""" + save_indent + """    selected.id,
+""" + save_indent + """    engineId: _selectedEngine,
+""" + save_indent + """    modelYear: _selectedYear,
+""" + save_indent + """  );
+""" + save_indent + """  if (!context.mounted) return;
+""" + save_indent + """  Navigator.pop(context, selected);
+""" + save_indent + """},
 """
-new_save_callback = """              onPressed: _selected == null || _selectedEngine == null ? null : () async {
-                final selected = _selected!;
-                await context.read<AppSettings>().setVehicle(
-                  selected.id,
-                  engineId: _selectedEngine,
-                  modelYear: _selectedYear,
-                );
-                if (!context.mounted) return;
-                Navigator.pop(context, selected);
-              },
-"""
-if old_save_callback not in selector_text:
-    raise RuntimeError("Vehicle profile save callback anchor missing")
-selector_text = selector_text.replace(old_save_callback, new_save_callback, 1)
+selector_text = selector_text[:save_line_start] + new_save_callback + selector_text[icon_line_start:]
 
 year_dropdown = """            if (VehicleCatalog.modelYearsFor(_selected!).isNotEmpty) ...[
               DropdownButtonFormField<int>(

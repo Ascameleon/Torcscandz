@@ -2459,7 +2459,8 @@ void main() {
     expect(engine, findsOneWidget);
     await tester.tap(engine);
     await tester.pumpAndSettle();
-    expect(find.text('1.5 dCi diesel'), findsOneWidget);
+    expect(find.text('1.5 dCi diesel').last, findsOneWidget);
+    expect(find.text('1.0 TCe essence'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

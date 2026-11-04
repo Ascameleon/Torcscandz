@@ -2851,37 +2851,38 @@ selector_text = selector_text.replace(
 """,
     1,
 )
-old_filter_callback = """            onChanged: (type) => setState(() {
-              _fuelType = type ?? 'all';
-              if (_selected != null) {
-                final options = _engineOptionsFor(_selected!);
-                if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
-              }
-            }),
+callback_start = selector_text.find("onChanged: (type)")
+if callback_start < 0:
+    raise RuntimeError("Fuel-filter callback was not found for profile persistence")
+callback_end = selector_text.find("}),", callback_start)
+if callback_end < 0:
+    raise RuntimeError("Fuel-filter callback terminator was not found")
+line_start = selector_text.rfind("\n", 0, callback_start) + 1
+line_end = selector_text.find("\n", callback_end)
+if line_end < 0:
+    raise RuntimeError("Fuel-filter callback line ending was not found")
+indent = selector_text[line_start:callback_start]
+new_callback = indent + """onChanged: (type) async {
+""" + indent + """  final nextFilter = type ?? 'all';
+""" + indent + """  final clearVehicle = _selected != null &&
+""" + indent + """      !VehicleCatalog.matchesFuelType(_selected!, nextFilter);
+""" + indent + """  setState(() {
+""" + indent + """    _fuelType = nextFilter;
+""" + indent + """    if (clearVehicle) {
+""" + indent + """      _selected = null;
+""" + indent + """      _selectedEngine = null;
+""" + indent + """      _selectedYear = null;
+""" + indent + """    } else if (_selected != null) {
+""" + indent + """      final options = _engineOptionsFor(_selected!);
+""" + indent + """      if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
+""" + indent + """    }
+""" + indent + """  });
+""" + indent + """  final settings = context.read<AppSettings>();
+""" + indent + """  await settings.setFuelFilter(nextFilter);
+""" + indent + """  if (clearVehicle) await settings.setVehicle(null);
+""" + indent + """},
 """
-new_filter_callback = """            onChanged: (type) async {
-              final nextFilter = type ?? 'all';
-              final clearVehicle = _selected != null &&
-                  !VehicleCatalog.matchesFuelType(_selected!, nextFilter);
-              setState(() {
-                _fuelType = nextFilter;
-                if (clearVehicle) {
-                  _selected = null;
-                  _selectedEngine = null;
-                  _selectedYear = null;
-                } else if (_selected != null) {
-                  final options = _engineOptionsFor(_selected!);
-                  if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
-                }
-              });
-              final settings = context.read<AppSettings>();
-              await settings.setFuelFilter(nextFilter);
-              if (clearVehicle) await settings.setVehicle(null);
-            },
-"""
-if old_filter_callback not in selector_text:
-    raise RuntimeError("Fuel-filter callback anchor changed before profile persistence patch")
-selector_text = selector_text.replace(old_filter_callback, new_filter_callback, 1)
+selector_text = selector_text[:line_start] + new_callback + selector_text[line_end + 1:]
 
 old_save_callback = """              onPressed: _selected == null || _selectedEngine == null ? null : () {
                 context.read<AppSettings>().setVehicle(_selected!.id, engineId: _selectedEngine);

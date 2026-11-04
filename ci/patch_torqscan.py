@@ -2012,27 +2012,27 @@ catalog_locales = [
         "      'choose_model': 'Choisissez la marque et le modèle à scanner', 'brand': 'Marque', 'model': 'Modèle',\n"
         "      'catalog_all_brands': 'Toutes', 'catalog_models': 'modèles', 'catalog_engine_count': 'motorisations',\n"
         "      'catalog_search_hint': 'Marque, modèle, moteur, carburant...', 'catalog_empty': 'Aucun modèle correspondant',\n"
-        "      'catalog_engine': 'Motorisation', 'catalog_disclaimer': 'Familles indicatives : vérifiez l’année, le marché et le VIN avant toute intervention.',
-      'catalog_fuel_filter': 'Type de motorisation', 'catalog_fuel_all': 'Tous carburants', 'catalog_fuel_petrol': 'Essence',
-      'catalog_fuel_diesel': 'Diesel', 'catalog_fuel_lpg': 'GPL', 'catalog_fuel_hybrid': 'Hybride', 'catalog_fuel_electric': 'Électrique', 'catalog_fuel_other': 'Autre',"
+        "      'catalog_engine': 'Motorisation', 'catalog_disclaimer': 'Familles indicatives : vérifiez l’année, le marché et le VIN avant toute intervention.',\n"
+        "      'catalog_fuel_filter': 'Type de motorisation', 'catalog_fuel_all': 'Tous carburants', 'catalog_fuel_petrol': 'Essence',\n"
+        "      'catalog_fuel_diesel': 'Diesel', 'catalog_fuel_lpg': 'GPL', 'catalog_fuel_hybrid': 'Hybride', 'catalog_fuel_electric': 'Électrique', 'catalog_fuel_other': 'Autre',"
     ),
     (
         "      'choose_model': 'Choose the make and model to scan', 'brand': 'Make', 'model': 'Model',",
         "      'choose_model': 'Choose the make and model to scan', 'brand': 'Make', 'model': 'Model',\n"
         "      'catalog_all_brands': 'All makes', 'catalog_models': 'models', 'catalog_engine_count': 'engine options',\n"
         "      'catalog_search_hint': 'Make, model, engine, fuel type...', 'catalog_empty': 'No matching model',\n"
-        "      'catalog_engine': 'Engine', 'catalog_disclaimer': 'Indicative engine families: verify model year, market and VIN before servicing.',
-      'catalog_fuel_filter': 'Engine type', 'catalog_fuel_all': 'All fuel types', 'catalog_fuel_petrol': 'Petrol',
-      'catalog_fuel_diesel': 'Diesel', 'catalog_fuel_lpg': 'LPG', 'catalog_fuel_hybrid': 'Hybrid', 'catalog_fuel_electric': 'Electric', 'catalog_fuel_other': 'Other',"
+        "      'catalog_engine': 'Engine', 'catalog_disclaimer': 'Indicative engine families: verify model year, market and VIN before servicing.',\n"
+        "      'catalog_fuel_filter': 'Engine type', 'catalog_fuel_all': 'All fuel types', 'catalog_fuel_petrol': 'Petrol',\n"
+        "      'catalog_fuel_diesel': 'Diesel', 'catalog_fuel_lpg': 'LPG', 'catalog_fuel_hybrid': 'Hybrid', 'catalog_fuel_electric': 'Electric', 'catalog_fuel_other': 'Other',"
     ),
     (
         "      'choose_model': 'اختر العلامة والطراز للفحص', 'brand': 'العلامة', 'model': 'الطراز',",
         "      'choose_model': 'اختر العلامة والطراز للفحص', 'brand': 'العلامة', 'model': 'الطراز',\n"
         "      'catalog_all_brands': 'كل العلامات', 'catalog_models': 'طرازاً', 'catalog_engine_count': 'خيارات المحرك',\n"
         "      'catalog_search_hint': 'ابحث عن العلامة أو الطراز أو المحرك أو الوقود...', 'catalog_empty': 'لا توجد نتائج مطابقة',\n"
-        "      'catalog_engine': 'المحرك', 'catalog_disclaimer': 'المحركات إرشادية: تحقق من سنة الصنع والسوق ورقم VIN قبل الصيانة.',
-      'catalog_fuel_filter': 'نوع المحرك', 'catalog_fuel_all': 'كل أنواع الوقود', 'catalog_fuel_petrol': 'بنزين',
-      'catalog_fuel_diesel': 'ديزل', 'catalog_fuel_lpg': 'غاز GPL', 'catalog_fuel_hybrid': 'هجين', 'catalog_fuel_electric': 'كهربائي', 'catalog_fuel_other': 'أخرى',"
+        "      'catalog_engine': 'المحرك', 'catalog_disclaimer': 'المحركات إرشادية: تحقق من سنة الصنع والسوق ورقم VIN قبل الصيانة.',\n"
+        "      'catalog_fuel_filter': 'نوع المحرك', 'catalog_fuel_all': 'كل أنواع الوقود', 'catalog_fuel_petrol': 'بنزين',\n"
+        "      'catalog_fuel_diesel': 'ديزل', 'catalog_fuel_lpg': 'غاز GPL', 'catalog_fuel_hybrid': 'هجين', 'catalog_fuel_electric': 'كهربائي', 'catalog_fuel_other': 'أخرى',"
     ),
 ]
 for source_text, replacement_text in catalog_locales:

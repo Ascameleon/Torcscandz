@@ -3161,17 +3161,6 @@ dtc_text = dtc_text.replace(
     1,
 )
 
-refresh_anchor = """            icon: const Icon(Icons.refresh),
-"""
-if dtc_text.count(refresh_anchor) != 1:
-    raise RuntimeError("DTC refresh action anchor changed")
-dtc_text = dtc_text.replace(
-    refresh_anchor,
-    """            tooltip: tr(context, 'refresh'),
-            icon: const Icon(Icons.refresh),
-""",
-    1,
-)
 dtc_file.write_text(dtc_text, encoding="utf-8")
 changes.append(str(dtc_file.relative_to(project)))
 

@@ -107,6 +107,26 @@ void main() {
       expect(ObdProtocol.decodeVin(invalidResponse), isNull);
     });
 
+    test('decodes a valid VIN from Mode 09 PID 02', () {
+      String responseFor(String vin) =>
+          '49 02 01 ' + vin.codeUnits.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+      expect(ObdProtocol.decodeVin(responseFor('1HGCM82633A004352')), '1HGCM82633A004352');
+      expect(
+        ObdProtocol.decodeVin('NO DATA\r\n' + responseFor('1HGCM82633A004352')),
+        '1HGCM82633A004352',
+      );
+    });
+
+    test('rejects malformed VIN lengths, forbidden characters and unrelated responses', () {
+      expect(ObdProtocol.decodeVin('NO DATA'), isNull);
+      expect(ObdProtocol.decodeVin('49 03 01 31 48 47 43'), isNull);
+      expect(ObdProtocol.decodeVin('49 02 01 31 48 47 43 4D'), isNull);
+      final invalid = '1HGCM82633I004352';
+      final invalidResponse = '49 02 01 ' +
+          invalid.codeUnits.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+      expect(ObdProtocol.decodeVin(invalidResponse), isNull);
+    });
+
     test('negative response', () {
       expect(ObdProtocol.isNegative('NO DATA'), isTrue);
       expect(ObdProtocol.isNegative('UNABLE TO CONNECT'), isTrue);

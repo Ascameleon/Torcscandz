@@ -3367,78 +3367,69 @@ changes.append(str(dtc_test.relative_to(project)))
 
 
 
-# Add a real ECU VIN read (SAE J1979 Mode 09, PID 02). This is deliberately
-# unavailable in demo mode and does not infer model/engine fitment from VIN.
+
+# Add a real ECU VIN read (SAE J1979 Mode 09, PID 02). Demo mode never
+# supplies a VIN and this read does not infer model or engine fitment.
 protocol_file = project / "lib/services/obd_protocol.dart"
 protocol_text = protocol_file.read_text(encoding="utf-8")
 if "static String? decodeVin(String response)" not in protocol_text:
     vin_decoder = """  static String? decodeVin(String response) {
     final bytes = findPidData(response, '0902');
     if (bytes.isEmpty) return null;
-    // Mode 09 PID 02 begins with the number of VIN data items (usually 01).
-    final payload = bytes.first <= 0x20 ? bytes.skip(1).take(17).toList() : bytes.take(17).toList();
+    // Mode 09 PID 02 starts with the number of VIN data items (normally 01).
+    final payload = bytes.first <= 0x20
+        ? bytes.skip(1).take(17).toList()
+        : bytes.take(17).toList();
     if (payload.length != 17) return null;
     final vin = String.fromCharCodes(payload).toUpperCase();
-    // ISO 3779 VINs exclude I, O and Q. Do not impose the North-American
-    // check-digit rule: many international-market VINs do not use it.
-    return RegExp(r'^[A-HJ-NPR-Z0-9]{17}    "patch": "torqscan-vin-read-responsive-info-v1",
-    "vin_decoder": "SAE J1979 Mode 09 PID 02; 17-character ISO 3779 validation; no automatic engine fitment",
-    "files": {name: sha256(project / name) for name in changes},
-    "catalog_data_sha256": sha256(catalog_path),
-    "catalog_model_entries": len(catalog_rows) - 1,
-    "catalog_manufacturers": len({row[1] for row in catalog_rows if row[0] != "generic_obd"}),
-    "socket_destroyed_references": 0,
-    "original_logo_sha256": original_logo_sha256,
-}
-(project / "torqscan-patch-report.json").write_text(json.dumps(report, indent=2) + "\n")
-print(json.dumps({"status": "patched", "files": changes, "report": report}, indent=2))
-).hasMatch(vin) ? vin : null;
+    // ISO 3779 excludes I, O and Q. No North-American-only check digit rule.
+    return RegExp(r'^[A-HJ-NPR-Z0-9]{17}$').hasMatch(vin) ? vin : null;
   }
 
 """
-    class_end = protocol_text.rfind("\\n}")
+    class_end = protocol_text.rfind("\n}")
     if class_end < 0:
         raise RuntimeError("OBD protocol class closing anchor missing for VIN decoder")
-    protocol_text = protocol_text[:class_end] + "\\n" + vin_decoder + protocol_text[class_end:]
+    protocol_text = protocol_text[:class_end] + "\n" + vin_decoder + protocol_text[class_end:]
 protocol_file.write_text(protocol_text, encoding="utf-8")
 changes.append(str(protocol_file.relative_to(project)))
 
 obd_service = project / "lib/services/obd_service.dart"
 obd_text = obd_service.read_text(encoding="utf-8")
-field_anchor = "  VehicleCapabilities _capabilities = const VehicleCapabilities();\\n"
+field_anchor = "  VehicleCapabilities _capabilities = const VehicleCapabilities();\n"
 if "String? _vin;" not in obd_text:
     if obd_text.count(field_anchor) != 1:
         raise RuntimeError("OBDService VIN state insertion anchor changed")
     obd_text = obd_text.replace(
         field_anchor,
-        field_anchor + "  String? _vin;\\n  String? _vinError;\\n  bool _readingVin = false;\\n",
+        field_anchor + "  String? _vin;\n  String? _vinError;\n  bool _readingVin = false;\n",
         1,
     )
-getter_anchor = "  VehicleCapabilities get capabilities => _capabilities;\\n"
+getter_anchor = "  VehicleCapabilities get capabilities => _capabilities;\n"
 if "String? get vin => _vin;" not in obd_text:
     if obd_text.count(getter_anchor) != 1:
         raise RuntimeError("OBDService VIN getter insertion anchor changed")
     obd_text = obd_text.replace(
         getter_anchor,
-        getter_anchor + "  String? get vin => _vin;\\n  String? get vinError => _vinError;\\n  bool get isReadingVin => _readingVin;\\n",
+        getter_anchor + "  String? get vin => _vin;\n  String? get vinError => _vinError;\n  bool get isReadingVin => _readingVin;\n",
         1,
     )
-reset_anchor = "    _capabilities = const VehicleCapabilities();\\n"
+reset_anchor = "    _capabilities = const VehicleCapabilities();\n"
 if obd_text.count(reset_anchor) != 2:
     raise RuntimeError("Expected reset and stopDemo capability-reset anchors; found " + str(obd_text.count(reset_anchor)))
 obd_text = obd_text.replace(
     reset_anchor,
-    reset_anchor + "    _vin = null;\\n    _vinError = null;\\n    _readingVin = false;\\n",
+    reset_anchor + "    _vin = null;\n    _vinError = null;\n    _readingVin = false;\n",
 )
-demo_anchor = "    _protocol = 'DEMO / Simulation';\\n"
+demo_anchor = "    _protocol = 'DEMO / Simulation';\n"
 if obd_text.count(demo_anchor) != 1:
     raise RuntimeError("OBDService demo-mode anchor changed")
 obd_text = obd_text.replace(
     demo_anchor,
-    demo_anchor + "    _vin = null;\\n    _vinError = null;\\n    _readingVin = false;\\n",
+    demo_anchor + "    _vin = null;\n    _vinError = null;\n    _readingVin = false;\n",
     1,
 )
-listener_anchor = "  void _startListener() {\\n"
+listener_anchor = "  void _startListener() {\n"
 if obd_text.count(listener_anchor) != 1:
     raise RuntimeError("OBDService listener insertion anchor changed")
 vin_reader = """  Future<String?> readVin() async {
@@ -3479,7 +3470,7 @@ obd_text = obd_text.replace(listener_anchor, vin_reader + listener_anchor, 1)
 obd_service.write_text(obd_text, encoding="utf-8")
 changes.append(str(obd_service.relative_to(project)))
 
-# Localized VIN controls and a compact, scrollable ECU-information card.
+# Localized VIN controls and a scrollable card that fits narrow phones and RTL.
 settings_file = project / "lib/core/app_settings.dart"
 settings_text = settings_file.read_text(encoding="utf-8")
 vin_locales = [
@@ -3497,7 +3488,7 @@ vin_locales = [
         "vin_not_read": "VIN not read",
         "vin_unavailable": "No valid VIN was returned by the ECU.",
         "vin_demo_unavailable": "Live VIN reading is disabled in demo mode.",
-        "vin_ecu_source": "VIN received over OBD-II. It does not by itself confirm the engine fitment.",
+        "vin_ecu_source": "VIN received over OBD-II. It does not by itself confirm engine fitment.",
     },
     {
         "vin_title": "معرّف المركبة (VIN)",
@@ -3508,16 +3499,16 @@ vin_locales = [
         "vin_ecu_source": "تم استلام VIN عبر OBD-II. ولا يؤكد وحده نوع المحرك.",
     },
 ]
-anchor_matches = list(re.finditer(r"(?m)^(\\s*)'supported_pids'\\s*:\\s*'[^']*',\\s*$", settings_text))
+anchor_matches = list(re.finditer(r"(?m)^(\s*)'supported_pids'\s*:\s*'[^']*',\s*$", settings_text))
 if len(anchor_matches) != 3:
-    raise RuntimeError("Expected the three locale supported_pids anchors; found " + str(len(anchor_matches)))
+    raise RuntimeError("Expected three locale supported_pids anchors; found " + str(len(anchor_matches)))
 for match, translations in reversed(list(zip(anchor_matches, vin_locales))):
     indent = match.group(1)
     lines = [
         indent + "'" + key + "': " + json.dumps(value, ensure_ascii=False) + ","
         for key, value in translations.items()
     ]
-    settings_text = settings_text[:match.end()] + "\\n" + "\\n".join(lines) + settings_text[match.end():]
+    settings_text = settings_text[:match.end()] + "\n" + "\n".join(lines) + settings_text[match.end():]
 settings_file.write_text(settings_text, encoding="utf-8")
 changes.append(str(settings_file.relative_to(project)))
 
@@ -3584,12 +3575,12 @@ vin_card_method = """  Widget _vinCard(BuildContext context, OBDService obd) {
   }
 
 """
-list_anchor = "            children: [\\n              _section(\\n"
+list_anchor = "            children: [\n              _section(\n"
 if vehicle_info_text.count(list_anchor) != 1:
     raise RuntimeError("VehicleInfo VIN card list insertion anchor changed")
 vehicle_info_text = vehicle_info_text.replace(
     list_anchor,
-    "            children: [\\n              _vinCard(context, obd),\\n              const SizedBox(height: 14),\\n              _section(\\n",
+    "            children: [\n              _vinCard(context, obd),\n              const SizedBox(height: 14),\n              _section(\n",
     1,
 )
 section_anchor = "  Widget _section(BuildContext context, String title, List<Widget> children) {"
@@ -3693,7 +3684,8 @@ if __import__('shutil').which('dart'):
 
 
 report = {
-    "patch": "torqscan-dtc-demo-guard-responsive-v1",
+    "patch": "torqscan-vin-read-responsive-info-v1",
+    "vin_decoder": "SAE J1979 Mode 09 PID 02; 17-character ISO 3779 validation; no automatic engine fitment",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

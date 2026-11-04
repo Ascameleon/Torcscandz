@@ -3287,6 +3287,79 @@ pubspec.write_text(pubspec_text, encoding="utf-8")
 changes.append(str(pubspec.relative_to(project)))
 
 
+
+# DTC headings must wrap instead of forcing their title/count Row past the
+# available width on compact screens and with enlarged accessibility text.
+dtc_file = project / "lib/screens/dtc_screen.dart"
+dtc_text = dtc_file.read_text(encoding="utf-8")
+header_start = "  Widget _header(String title, int count, Color color) => Padding("
+header_end = "\n\n  Widget _card("
+responsive_header = """  Widget _header(String title, int count, Color color) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Container(
+              width: 4,
+              height: 18,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: color.withOpacity(.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+              ),
+            ),
+          ],
+        ),
+      );"""
+dtc_text = replace_between(
+    dtc_text,
+    header_start,
+    header_end,
+    responsive_header,
+    "dtc_screen.responsive_header",
+)
+dtc_file.write_text(dtc_text, encoding="utf-8")
+
+dtc_test = project / "test/dtc_demo_guard_test.dart"
+dtc_test_text = dtc_test.read_text(encoding="utf-8")
+old_pending_expectation = """    expect(find.text('P0301'), findsOneWidget);
+    expect(find.text('مسح الأكواد'), findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, -260));
+    await tester.pumpAndSettle();
+"""
+new_pending_expectation = """    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+    expect(find.text('P0301'), findsOneWidget);
+    expect(find.text('مسح الأكواد'), findsNothing);
+"""
+if dtc_test_text.count(old_pending_expectation) != 1:
+    raise RuntimeError("Arabic DTC pending-code visibility test anchor changed")
+dtc_test_text = dtc_test_text.replace(old_pending_expectation, new_pending_expectation, 1)
+dtc_test.write_text(dtc_test_text, encoding="utf-8")
+if __import__('shutil').which('dart'):
+    subprocess.run(["dart", "format", str(dtc_file), str(dtc_test)], check=True, cwd=project)
+changes.append(str(dtc_file.relative_to(project)))
+changes.append(str(dtc_test.relative_to(project)))
+
+
 report = {
     "patch": "torqscan-dtc-demo-guard-responsive-v1",
     "files": {name: sha256(project / name) for name in changes},

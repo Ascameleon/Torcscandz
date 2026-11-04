@@ -3051,8 +3051,255 @@ pubspec.write_text(pubspec_text, encoding="utf-8")
 changes.append(str(pubspec.relative_to(project)))
 
 
+
+# Make simulated trouble codes unmistakably distinct from ECU-read diagnostics.
+settings_file = project / "lib/core/app_settings.dart"
+settings_text = settings_file.read_text(encoding="utf-8")
+demo_locales = [
+    ("Mode démo", "MODE DÉMO — Ces codes sont fictifs et ne proviennent pas d’un calculateur."),
+    ("Demo mode", "DEMO MODE — These codes are simulated and were not read from an ECU."),
+    ("وضع التجربة", "وضع تجريبي — هذه الرموز افتراضية ولم تُقرأ من وحدة تحكم فعلية."),
+]
+for mode_label, warning in demo_locales:
+    pattern = r"('demo_mode'\s*:\s*" + re.escape(json.dumps(mode_label, ensure_ascii=False)) + r"\s*,)"
+    settings_text, localized = re.subn(
+        pattern,
+        lambda match, value=warning: match.group(1)
+        + " 'dtc_demo_warning': "
+        + json.dumps(value, ensure_ascii=False)
+        + ",",
+        settings_text,
+        count=1,
+    )
+    if localized != 1:
+        raise RuntimeError("DTC demo warning localization anchor missing for " + mode_label)
+settings_file.write_text(settings_text, encoding="utf-8")
+changes.append(str(settings_file.relative_to(project)))
+
+dtc_file = project / "lib/screens/dtc_screen.dart"
+dtc_text = dtc_file.read_text(encoding="utf-8")
+body_anchor = """      body: Consumer<OBDService>(
+        builder: (context, obd, _) {
+"""
+body_replacement = """      body: Column(
+        children: [
+          Consumer<OBDService>(
+            builder: (context, obd, _) =>
+                obd.isDemo ? _demoNotice(context) : const SizedBox.shrink(),
+          ),
+          Expanded(
+            child: Consumer<OBDService>(
+              builder: (context, obd, _) {
+"""
+if dtc_text.count(body_anchor) != 1:
+    raise RuntimeError("DTC body consumer anchor changed; refusing an unsafe widget-tree edit")
+dtc_text = dtc_text.replace(body_anchor, body_replacement, 1)
+
+closing_anchor = """        },
+      ),
+    );
+  }
+
+  Widget _header("""
+closing_replacement = """              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _demoNotice(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.tertiary.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.science_outlined, color: scheme.tertiary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tr(context, 'dtc_demo_warning'),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _header("""
+if dtc_text.count(closing_anchor) != 1:
+    raise RuntimeError("DTC body consumer closing anchor changed; refusing an unsafe widget-tree edit")
+dtc_text = dtc_text.replace(closing_anchor, closing_replacement, 1)
+
+clear_anchor = """              SafeArea(
+                child: Padding(
+"""
+if dtc_text.count(clear_anchor) != 1:
+    raise RuntimeError("DTC clear-action SafeArea anchor changed")
+dtc_text = dtc_text.replace(
+    clear_anchor,
+    """              if (!obd.isDemo)
+                SafeArea(
+                  child: Padding(
+""",
+    1,
+)
+
+refresh_anchor = """            icon: const Icon(Icons.refresh),
+"""
+if dtc_text.count(refresh_anchor) != 1:
+    raise RuntimeError("DTC refresh action anchor changed")
+dtc_text = dtc_text.replace(
+    refresh_anchor,
+    """            tooltip: tr(context, 'refresh'),
+            icon: const Icon(Icons.refresh),
+""",
+    1,
+)
+dtc_file.write_text(dtc_text, encoding="utf-8")
+changes.append(str(dtc_file.relative_to(project)))
+
+dtc_test = project / "test/dtc_demo_guard_test.dart"
+dtc_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/screens/dtc_screen.dart';
+import 'package:torqscan/services/bluetooth_service.dart';
+import 'package:torqscan/services/obd_service.dart';
+
+Future<void> pumpDtcScreen(
+  WidgetTester tester, {
+  required Size size,
+  required String language,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  final settings = AppSettings()..language = language;
+  final bluetooth = BluetoothService();
+  final obd = OBDService(bluetooth);
+  addTearDown(() {
+    obd.stopDemo();
+    obd.dispose();
+    bluetooth.dispose();
+    settings.dispose();
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  await obd.startDemo();
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppSettings>.value(value: settings),
+        ChangeNotifierProvider<BluetoothService>.value(value: bluetooth),
+        ChangeNotifierProvider<OBDService>.value(value: obd),
+      ],
+      child: MaterialApp(
+        home: const DTCScreen(),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(textScaler: const TextScaler.linear(1.35)),
+            child: Directionality(
+              textDirection:
+                  language == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+              child: child!,
+            ),
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  expect(tester.takeException(), isNull);
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('compact French DTC demo is labelled and cannot clear ECU codes', (
+    tester,
+  ) async {
+    await pumpDtcScreen(
+      tester,
+      size: const Size(320, 520),
+      language: 'fr',
+    );
+
+    expect(
+      find.textContaining('MODE DÉMO'),
+      findsOneWidget,
+    );
+    expect(find.text('P0420'), findsOneWidget);
+    expect(find.text('Effacer les codes'), findsNothing);
+    expect(find.byType(ListView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact Arabic DTC demo remains labelled in RTL and scrollable', (
+    tester,
+  ) async {
+    await pumpDtcScreen(
+      tester,
+      size: const Size(360, 560),
+      language: 'ar',
+    );
+
+    expect(find.textContaining('وضع تجريبي'), findsOneWidget);
+    expect(
+      Directionality.of(tester.element(find.byType(ListView))),
+      TextDirection.rtl,
+    );
+    expect(find.text('P0301'), findsOneWidget);
+    expect(find.text('مسح الأكواد'), findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, -260));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+}
+""", encoding="utf-8")
+changes.append(str(dtc_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(
+        ["dart", "format", str(dtc_file), str(settings_file), str(dtc_test)],
+        check=True,
+        cwd=project,
+    )
+
+pubspec = project / "pubspec.yaml"
+pubspec_text = pubspec.read_text(encoding="utf-8")
+pubspec_text, version_count = re.subn(
+    r"(?m)^version:\s*1\.4\.12\+36\s*$",
+    "version: 1.4.13+37",
+    pubspec_text,
+    count=1,
+)
+if version_count != 1:
+    raise RuntimeError("Expected generated version 1.4.12+36 before setting 1.4.13+37")
+pubspec.write_text(pubspec_text, encoding="utf-8")
+changes.append(str(pubspec.relative_to(project)))
+
+
 report = {
-    "patch": "torqscan-persisted-vehicle-profile-v1",
+    "patch": "torqscan-dtc-demo-guard-responsive-v1",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

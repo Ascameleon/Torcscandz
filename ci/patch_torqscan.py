@@ -1946,6 +1946,48 @@ class VehicleCatalog {
   static List<String> get brands => vehicles.map((v) => v.brand).toSet().toList()..sort();
   static List<VehicleModel> modelsForBrand(String brand) =>
       vehicles.where((vehicle) => vehicle.brand == brand).toList();
+
+  static Set<String> fuelTypesForEngine(String label) {
+    final value = label.toLowerCase().replaceAll('é', 'e');
+    final types = <String>{};
+    bool containsAny(List<String> terms) => terms.any(value.contains);
+    if (containsAny(['gpl', 'lpg', 'eco-g'])) types.add('lpg');
+    if (containsAny(['electrique', 'electric'])) types.add('electric');
+    if (containsAny([
+      'hybride', 'hybrid', 'phev', 'hev', 'e-tech', 'e:hev',
+      'mhev', 'mild-hybrid', 'mild hybrid', 'e-power', '4xe', 't-hybrid',
+    ])) {
+      types.add('hybrid');
+    }
+    if (containsAny([
+      'diesel', 'dci', 'tdi', 'hdi', 'bluehdi', 'tdci', 'ecoblue',
+      'crdi', 'multijet', 'tddi', 'cdti', 'di-d', 'd-4d',
+    ])) {
+      types.add('diesel');
+    }
+    if (containsAny([
+      'essence', 'petrol', 'gasoline', 'tsi', 'tfsi', 'tce', 'puretech',
+      'ecoboost', 'vtec', 'gdi', 'tgdi', 'mpi', 'skyactiv-g', 'skyactiv-x',
+      'firefly', 'multiair', 'boosterjet', 'vvt', 'turbo', 'flat-six',
+      'boxer', 'v6', 'v8', 'gt3', 'atmospherique',
+    ])) {
+      types.add('petrol');
+    }
+    if (types.isEmpty) types.add('other');
+    return types;
+  }
+
+  static bool matchesFuelType(VehicleModel vehicle, String fuelType) {
+    if (fuelType == 'all') return true;
+    if (fuelType == 'other' && vehicle.id == 'generic_obd') return true;
+    return vehicle.engines.any(
+      (engine) => fuelTypesForEngine(engine).contains(fuelType),
+    );
+  }
+
+  static List<VehicleModel> modelsForFuelType(String fuelType) =>
+      vehicles.where((vehicle) => matchesFuelType(vehicle, fuelType)).toList();
+
   static VehicleModel? byId(String? id) {
     for (final vehicle in vehicles) { if (vehicle.id == id) return vehicle; }
     return null;
@@ -1970,21 +2012,27 @@ catalog_locales = [
         "      'choose_model': 'Choisissez la marque et le modèle à scanner', 'brand': 'Marque', 'model': 'Modèle',\n"
         "      'catalog_all_brands': 'Toutes', 'catalog_models': 'modèles', 'catalog_engine_count': 'motorisations',\n"
         "      'catalog_search_hint': 'Marque, modèle, moteur, carburant...', 'catalog_empty': 'Aucun modèle correspondant',\n"
-        "      'catalog_engine': 'Motorisation', 'catalog_disclaimer': 'Familles indicatives : vérifiez l’année, le marché et le VIN avant toute intervention.',"
+        "      'catalog_engine': 'Motorisation', 'catalog_disclaimer': 'Familles indicatives : vérifiez l’année, le marché et le VIN avant toute intervention.',
+      'catalog_fuel_filter': 'Type de motorisation', 'catalog_fuel_all': 'Tous carburants', 'catalog_fuel_petrol': 'Essence',
+      'catalog_fuel_diesel': 'Diesel', 'catalog_fuel_lpg': 'GPL', 'catalog_fuel_hybrid': 'Hybride', 'catalog_fuel_electric': 'Électrique', 'catalog_fuel_other': 'Autre',"
     ),
     (
         "      'choose_model': 'Choose the make and model to scan', 'brand': 'Make', 'model': 'Model',",
         "      'choose_model': 'Choose the make and model to scan', 'brand': 'Make', 'model': 'Model',\n"
         "      'catalog_all_brands': 'All makes', 'catalog_models': 'models', 'catalog_engine_count': 'engine options',\n"
         "      'catalog_search_hint': 'Make, model, engine, fuel type...', 'catalog_empty': 'No matching model',\n"
-        "      'catalog_engine': 'Engine', 'catalog_disclaimer': 'Indicative engine families: verify model year, market and VIN before servicing.',"
+        "      'catalog_engine': 'Engine', 'catalog_disclaimer': 'Indicative engine families: verify model year, market and VIN before servicing.',
+      'catalog_fuel_filter': 'Engine type', 'catalog_fuel_all': 'All fuel types', 'catalog_fuel_petrol': 'Petrol',
+      'catalog_fuel_diesel': 'Diesel', 'catalog_fuel_lpg': 'LPG', 'catalog_fuel_hybrid': 'Hybrid', 'catalog_fuel_electric': 'Electric', 'catalog_fuel_other': 'Other',"
     ),
     (
         "      'choose_model': 'اختر العلامة والطراز للفحص', 'brand': 'العلامة', 'model': 'الطراز',",
         "      'choose_model': 'اختر العلامة والطراز للفحص', 'brand': 'العلامة', 'model': 'الطراز',\n"
         "      'catalog_all_brands': 'كل العلامات', 'catalog_models': 'طرازاً', 'catalog_engine_count': 'خيارات المحرك',\n"
         "      'catalog_search_hint': 'ابحث عن العلامة أو الطراز أو المحرك أو الوقود...', 'catalog_empty': 'لا توجد نتائج مطابقة',\n"
-        "      'catalog_engine': 'المحرك', 'catalog_disclaimer': 'المحركات إرشادية: تحقق من سنة الصنع والسوق ورقم VIN قبل الصيانة.',"
+        "      'catalog_engine': 'المحرك', 'catalog_disclaimer': 'المحركات إرشادية: تحقق من سنة الصنع والسوق ورقم VIN قبل الصيانة.',
+      'catalog_fuel_filter': 'نوع المحرك', 'catalog_fuel_all': 'كل أنواع الوقود', 'catalog_fuel_petrol': 'بنزين',
+      'catalog_fuel_diesel': 'ديزل', 'catalog_fuel_lpg': 'غاز GPL', 'catalog_fuel_hybrid': 'هجين', 'catalog_fuel_electric': 'كهربائي', 'catalog_fuel_other': 'أخرى',"
     ),
 ]
 for source_text, replacement_text in catalog_locales:
@@ -2016,6 +2064,7 @@ class VehicleSelectorScreen extends StatefulWidget {
 class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
   String _query = '';
   String _brand = '';
+  String _fuelType = 'all';
   VehicleModel? _selected;
   String? _selectedEngine;
 
@@ -2030,6 +2079,14 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
     }
   }
 
+  List<String> _engineOptionsFor(VehicleModel vehicle) {
+    if (_fuelType == 'all' || _fuelType == 'other') return vehicle.engines;
+    final matching = vehicle.engines
+        .where((engine) => VehicleCatalog.fuelTypesForEngine(engine).contains(_fuelType))
+        .toList();
+    return matching.isEmpty ? vehicle.engines : matching;
+  }
+
   @override
   Widget build(BuildContext context) {
     final allBrands = tr(context, 'catalog_all_brands');
@@ -2037,8 +2094,9 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
     final q = _query.trim().toLowerCase();
     final list = VehicleCatalog.vehicles.where((v) {
       final matchesBrand = _brand.isEmpty || v.brand == _brand;
-      final searchable = (v.brand + ' ' + v.model + ' ' + v.year + ' ' + v.engines.join(' ')).toLowerCase();
-      return matchesBrand && searchable.contains(q);
+      final matchesFuel = VehicleCatalog.matchesFuelType(v, _fuelType);
+      final searchable = (v.brand + ' ' + v.model + ' ' + v.year + ' ' + v.body + ' ' + v.engines.join(' ')).toLowerCase();
+      return matchesBrand && matchesFuel && searchable.contains(q);
     }).toList();
     return Scaffold(
       appBar: AppBar(
@@ -2058,6 +2116,33 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
               border: OutlineInputBorder(),
             ),
             onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: DropdownButtonFormField<String>(
+            key: const ValueKey('vehicle-fuel-filter'),
+            value: _fuelType,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: tr(context, 'catalog_fuel_filter'),
+              prefixIcon: const Icon(Icons.local_gas_station_outlined),
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: const ['all', 'petrol', 'diesel', 'lpg', 'hybrid', 'electric', 'other']
+                .map((type) => DropdownMenuItem<String>(
+                      value: type,
+                      child: Text(tr(context, 'catalog_fuel_' + type)),
+                    ))
+                .toList(),
+            onChanged: (type) => setState(() {
+              _fuelType = type ?? 'all';
+              if (_selected != null) {
+                final options = _engineOptionsFor(_selected!);
+                if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
+              }
+            }),
           ),
         ),
         SizedBox(height: 48, child: ListView.separated(
@@ -2104,7 +2189,7 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
                 prefixIcon: Icon(Icons.settings_suggest_outlined),
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
-              items: _selected!.engines.map((engine) => DropdownMenuItem<String>(
+              items: _engineOptionsFor(_selected!).map((engine) => DropdownMenuItem<String>(
                 value: engine,
                 child: Text(engine, maxLines: 2, overflow: TextOverflow.ellipsis),
               )).toList(),
@@ -2134,7 +2219,7 @@ class _VehicleSelectorScreenState extends State<VehicleSelectorScreen> {
   Widget _vehicleCard(BuildContext context, VehicleModel v) {
     final selected = _selected?.id == v.id;
     return InkWell(
-      onTap: () => setState(() { _selected = v; _selectedEngine = v.engines.first; }),
+      onTap: () => setState(() { _selected = v; _selectedEngine = _engineOptionsFor(v).first; }),
       borderRadius: BorderRadius.circular(18),
       child: Card(
         shape: RoundedRectangleBorder(
@@ -2222,6 +2307,17 @@ void main() {
       expect(all, contains('essence'));
       expect(all, contains('gpl'));
     });
+    test('fuel-family classification and filters return matching model families', () {
+      expect(VehicleCatalog.fuelTypesForEngine('1.2 PureTech essence'), contains('petrol'));
+      expect(VehicleCatalog.fuelTypesForEngine('1.5 BlueHDi diesel'), contains('diesel'));
+      expect(VehicleCatalog.fuelTypesForEngine('1.0 ECO-G GPL'), contains('lpg'));
+      expect(VehicleCatalog.fuelTypesForEngine('1.6 HEV hybride'), contains('hybrid'));
+      expect(VehicleCatalog.fuelTypesForEngine('64 kWh électrique'), contains('electric'));
+      expect(VehicleCatalog.modelsForFuelType('diesel').map((v) => v.id), contains('dacia_duster'));
+      expect(VehicleCatalog.modelsForFuelType('lpg').map((v) => v.id), contains('dacia_sandero'));
+      expect(VehicleCatalog.modelsForFuelType('electric').map((v) => v.id), contains('tesla_model3'));
+      expect(VehicleCatalog.modelsForFuelType('other').map((v) => v.id), contains('generic_obd'));
+    });
   });
 }
 """)
@@ -2268,8 +2364,8 @@ void main() {
       expect(find.text('Peugeot 208').last, findsOneWidget);
       await tester.tap(find.text('Peugeot 208').last);
       await tester.pumpAndSettle();
-      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      expect(find.byKey(const ValueKey('engine-peugeot_208')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('engine-peugeot_208')));
       await tester.pumpAndSettle();
       expect(find.text('1.5 BlueHDi diesel'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -2282,7 +2378,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Peugeot 208').last);
     await tester.pumpAndSettle();
-    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    expect(find.byKey(const ValueKey('engine-peugeot_208')), findsOneWidget);
     expect(find.text('المحرك — Peugeot 208'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -2328,7 +2424,7 @@ void main() {
     expect(model, findsOneWidget);
     await tester.tap(model);
     await tester.pumpAndSettle();
-    final engine = find.byType(DropdownButtonFormField<String>);
+    final engine = find.byKey(const ValueKey('engine-mercedes_c'));
     expect(engine, findsOneWidget);
     await tester.tap(engine);
     await tester.pumpAndSettle();
@@ -2342,8 +2438,28 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Peugeot 208').last);
     await tester.pumpAndSettle();
-    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    expect(find.byKey(const ValueKey('engine-peugeot_208')), findsOneWidget);
     expect(find.text('المحرك — Peugeot 208'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('diesel filter narrows the catalogue and engine choices', (tester) async {
+    await pumpSelector(tester, size: const Size(320, 720), language: 'fr');
+    await tester.tap(find.byKey(const ValueKey('vehicle-fuel-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Diesel').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Dacia Duster');
+    await tester.pumpAndSettle();
+    final model = find.text('Dacia Duster').last;
+    expect(model, findsOneWidget);
+    await tester.tap(model);
+    await tester.pumpAndSettle();
+    final engine = find.byKey(const ValueKey('engine-dacia_duster'));
+    expect(engine, findsOneWidget);
+    await tester.tap(engine);
+    await tester.pumpAndSettle();
+    expect(find.text('1.5 dCi diesel'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -2355,7 +2471,7 @@ if __import__('shutil').which('dart'):
 
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text()
-pubspec_text, version_count = re.subn(r"(?m)^version:\s*\S+\s*$", "version: 1.4.9+33", pubspec_text, count=1)
+pubspec_text, version_count = re.subn(r"(?m)^version:\s*\S+\s*$", "version: 1.4.10+34", pubspec_text, count=1)
 if version_count != 1:
     raise RuntimeError("Could not replace the single pubspec version field with 1.4.9+33")
 pubspec.write_text(pubspec_text)
@@ -2363,7 +2479,7 @@ changes.append(str(pubspec.relative_to(project)))
 
 
 report = {
-    "patch": "torqscan-global-vehicle-engine-catalog-v2",
+    "patch": "torqscan-fuel-family-filter-v1",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

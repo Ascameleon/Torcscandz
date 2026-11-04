@@ -2479,8 +2479,205 @@ pubspec.write_text(pubspec_text)
 changes.append(str(pubspec.relative_to(project)))
 
 
+
+# Tighten fuel-family classification and invalidate a selected vehicle when
+# the user changes to a fuel filter that the vehicle cannot satisfy.
+vehicle_file = project / "lib" / "models" / "vehicle.dart"
+vehicle_text = vehicle_file.read_text(encoding="utf-8")
+old_petrol = """    if (containsAny([
+      'essence', 'petrol', 'gasoline', 'tsi', 'tfsi', 'tce', 'puretech',
+      'ecoboost', 'vtec', 'gdi', 'tgdi', 'mpi', 'skyactiv-g', 'skyactiv-x',
+      'firefly', 'multiair', 'boosterjet', 'vvt', 'turbo', 'flat-six',
+      'boxer', 'v6', 'v8', 'gt3', 'atmospherique',
+    ])) {
+      types.add('petrol');
+    }
+"""
+new_petrol = """    if (containsAny([
+      'essence', 'petrol', 'gasoline', 'tsi', 'tfsi', 'tce', 'puretech',
+      'ecoboost', 'vtec', 'gdi', 'tgdi', 'mpi', 'skyactiv-g', 'skyactiv-x',
+      'firefly', 'multiair', 'boosterjet', 'vvt', 'twinpower', 'ecotec',
+      'tjet', 't-jet', 'thp', 'dig-t', 'revotron', 'mstallion', 'twinair',
+      'fsi', 'hpi', 'gt3', 'atmospherique',
+    ])) {
+      types.add('petrol');
+    }
+"""
+if old_petrol not in vehicle_text:
+    raise RuntimeError("Fuel classifier petrol-token block changed; refusing an unverified patch")
+vehicle_text = vehicle_text.replace(old_petrol, new_petrol, 1)
+old_diesel = """    if (containsAny([
+      'diesel', 'dci', 'tdi', 'hdi', 'bluehdi', 'tdci', 'ecoblue',
+      'crdi', 'multijet', 'tddi', 'cdti', 'di-d', 'd-4d',
+    ])) {
+      types.add('diesel');
+    }
+"""
+new_diesel = """    if (containsAny([
+      'diesel', 'dci', 'tdi', 'hdi', 'bluehdi', 'tdci', 'ecoblue',
+      'crdi', 'multijet', 'tddi', 'cdti', 'di-d', 'd-4d', 'd4d',
+      'jtd', 'jtdm', 'tdv6', 'tdv8', 'turbodiesel', 'ecodiesel',
+      'duramax', 'cummins', 'powerstroke', 'skyactiv-d',
+    ])) {
+      types.add('diesel');
+    }
+"""
+if old_diesel not in vehicle_text:
+    raise RuntimeError("Fuel classifier diesel-token block changed; refusing an unverified patch")
+vehicle_text = vehicle_text.replace(old_diesel, new_diesel, 1)
+vehicle_file.write_text(vehicle_text, encoding="utf-8")
+changes.append(str(vehicle_file.relative_to(project)))
+
+selector_file = project / "lib" / "screens" / "vehicle_selector_screen.dart"
+selector_text = selector_file.read_text(encoding="utf-8")
+old_options = """  List<String> _engineOptionsFor(VehicleModel vehicle) {
+    if (_fuelType == 'all' || _fuelType == 'other') return vehicle.engines;
+    final matching = vehicle.engines
+        .where((engine) => VehicleCatalog.fuelTypesForEngine(engine).contains(_fuelType))
+        .toList();
+    return matching.isEmpty ? vehicle.engines : matching;
+  }
+"""
+new_options = """  List<String> _engineOptionsFor(VehicleModel vehicle) {
+    if (_fuelType == 'all') return vehicle.engines;
+    if (_fuelType == 'other') {
+      return vehicle.id == 'generic_obd' ? vehicle.engines : <String>[];
+    }
+    return vehicle.engines
+        .where((engine) => VehicleCatalog.fuelTypesForEngine(engine).contains(_fuelType))
+        .toList();
+  }
+"""
+if old_options not in selector_text:
+    raise RuntimeError("Vehicle engine filter method changed; refusing an unverified patch")
+selector_text = selector_text.replace(old_options, new_options, 1)
+old_filter_change = """            onChanged: (type) => setState(() {
+              _fuelType = type ?? 'all';
+              if (_selected != null) {
+                final options = _engineOptionsFor(_selected!);
+                if (!options.contains(_selectedEngine)) _selectedEngine = options.first;
+              }
+            }),
+"""
+new_filter_change = """            onChanged: (type) => setState(() {
+              _fuelType = type ?? 'all';
+              if (_selected != null &&
+                  !VehicleCatalog.matchesFuelType(_selected!, _fuelType)) {
+                _selected = null;
+                _selectedEngine = null;
+              } else if (_selected != null) {
+                final options = _engineOptionsFor(_selected!);
+                if (options.isNotEmpty && !options.contains(_selectedEngine)) {
+                  _selectedEngine = options.first;
+                }
+              }
+            }),
+"""
+if old_filter_change not in selector_text:
+    raise RuntimeError("Vehicle fuel-filter callback changed; refusing an unverified patch")
+selector_text = selector_text.replace(old_filter_change, new_filter_change, 1)
+selector_file.write_text(selector_text, encoding="utf-8")
+changes.append(str(selector_file.relative_to(project)))
+
+safety_test = project / "test" / "fuel_filter_safety_test.dart"
+safety_test.write_text("""import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:torqscan/core/app_settings.dart';
+import 'package:torqscan/models/vehicle.dart';
+import 'package:torqscan/screens/vehicle_selector_screen.dart';
+
+void main() {
+  group('Fuel-family classification', () {
+    test('does not mistake generic turbo or V6 architecture for petrol', () {
+      expect(VehicleCatalog.fuelTypesForEngine('2.0 Turbo diesel'), contains('diesel'));
+      expect(VehicleCatalog.fuelTypesForEngine('2.0 Turbo diesel'), isNot(contains('petrol')));
+      expect(VehicleCatalog.fuelTypesForEngine('3.0 V6 diesel'), contains('diesel'));
+      expect(VehicleCatalog.fuelTypesForEngine('3.0 V6 diesel'), isNot(contains('petrol')));
+    });
+
+    test('keeps explicit petrol engine families classified as petrol', () {
+      expect(VehicleCatalog.fuelTypesForEngine('2.0 Turbo essence'), contains('petrol'));
+      expect(VehicleCatalog.fuelTypesForEngine('3.0 V6 biturbo essence'), contains('petrol'));
+      expect(VehicleCatalog.fuelTypesForEngine('1.5 TSI essence'), contains('petrol'));
+    });
+
+    test('recognizes additional diesel family codes', () {
+      for (final label in [
+        '1.9 JTD diesel',
+        '3.0 TDV6 diesel',
+        '2.2 Skyactiv-D diesel',
+        '2.8 Duramax turbodiesel',
+      ]) {
+        expect(VehicleCatalog.fuelTypesForEngine(label), contains('diesel'), reason: label);
+        expect(VehicleCatalog.fuelTypesForEngine(label), isNot(contains('petrol')), reason: label);
+      }
+    });
+
+    test('a plug-in hybrid petrol engine can match both relevant filters', () {
+      final types = VehicleCatalog.fuelTypesForEngine('1.4 TFSI e hybride rechargeable');
+      expect(types, contains('hybrid'));
+      expect(types, contains('petrol'));
+    });
+  });
+
+  testWidgets('changing fuel filter clears an incompatible selected vehicle', (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final settings = AppSettings()..language = 'fr';
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppSettings>.value(
+        value: settings,
+        child: const MaterialApp(home: VehicleSelectorScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Dacia Duster');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dacia Duster').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('engine-dacia_duster')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('vehicle-fuel-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Électrique').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('engine-dacia_duster')), findsNothing);
+    expect(find.text('Motorisation — Dacia Duster'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+}
+""", encoding="utf-8")
+changes.append(str(safety_test.relative_to(project)))
+
+if __import__('shutil').which('dart'):
+    subprocess.run(
+        ["dart", "format", str(vehicle_file), str(selector_file), str(safety_test)],
+        check=True,
+        cwd=project,
+    )
+
+pubspec = project / "pubspec.yaml"
+pubspec_text = pubspec.read_text(encoding="utf-8")
+pubspec_text, version_count = re.subn(
+    r"(?m)^version:\s*1\.4\.10\+34\s*$",
+    "version: 1.4.11+35",
+    pubspec_text,
+    count=1,
+)
+if version_count != 1:
+    raise RuntimeError("Expected the generated release version 1.4.10+34 before setting 1.4.11+35")
+pubspec.write_text(pubspec_text, encoding="utf-8")
+changes.append(str(pubspec.relative_to(project)))
+
+
 report = {
-    "patch": "torqscan-fuel-family-filter-v1",
+    "patch": "torqscan-fuel-filter-precision-v2",
     "files": {name: sha256(project / name) for name in changes},
     "catalog_data_sha256": sha256(catalog_path),
     "catalog_model_entries": len(catalog_rows) - 1,

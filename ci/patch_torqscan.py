@@ -2663,6 +2663,10 @@ if "shared_preferences:" not in pubspec_text:
         raise RuntimeError("Provider dependency anchor missing for profile persistence")
     pubspec_text = pubspec_text[:provider_line.end()] + "\n  shared_preferences: ^2.5.3" + pubspec_text[provider_line.end():]
 pubspec.write_text(pubspec_text, encoding="utf-8")
+flutter_executable = __import__('shutil').which('flutter')
+if flutter_executable is None:
+    raise RuntimeError("Flutter executable is required to resolve the new shared_preferences dependency")
+subprocess.run([flutter_executable, "pub", "get"], check=True, cwd=project)
 changes.append(str(pubspec.relative_to(project)))
 
 settings_file = project / "lib/core/app_settings.dart"
@@ -2807,17 +2811,20 @@ changes.append(str(vehicle_file.relative_to(project)))
 
 settings_text = settings_file.read_text(encoding="utf-8")
 locale_year_keys = [
-    ("'catalog_engine': 'Motorisation', 'catalog_disclaimer':",
-     "'catalog_engine': 'Motorisation', 'catalog_model_year': 'Année du modèle', 'catalog_disclaimer':"),
-    ("'catalog_engine': 'Engine', 'catalog_disclaimer':",
-     "'catalog_engine': 'Engine', 'catalog_model_year': 'Model year', 'catalog_disclaimer':"),
-    ("'catalog_engine': 'المحرك', 'catalog_disclaimer':",
-     "'catalog_engine': 'المحرك', 'catalog_model_year': 'سنة الطراز', 'catalog_disclaimer':"),
+    ("Motorisation", "Année du modèle"),
+    ("Engine", "Model year"),
+    ("المحرك", "سنة الطراز"),
 ]
-for source_text, replacement_text in locale_year_keys:
-    if source_text not in settings_text:
-        raise RuntimeError("Model-year localization anchor missing: " + source_text)
-    settings_text = settings_text.replace(source_text, replacement_text, 1)
+for engine_label, year_label in locale_year_keys:
+    pattern = r"('catalog_engine'\s*:\s*" + re.escape("'" + engine_label + "'") + r"\s*,)"
+    settings_text, localized = re.subn(
+        pattern,
+        lambda match: match.group(1) + " 'catalog_model_year': " + json.dumps(year_label, ensure_ascii=False) + ",",
+        settings_text,
+        count=1,
+    )
+    if localized != 1:
+        raise RuntimeError("Model-year localization could not be inserted for: " + engine_label)
 settings_file.write_text(settings_text, encoding="utf-8")
 
 selector_file = project / "lib/screens/vehicle_selector_screen.dart"

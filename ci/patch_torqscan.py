@@ -3276,13 +3276,13 @@ if __import__('shutil').which('dart'):
 pubspec = project / "pubspec.yaml"
 pubspec_text = pubspec.read_text(encoding="utf-8")
 pubspec_text, version_count = re.subn(
-    r"(?m)^version:\s*1\.4\.14\+38\s*$",
+    r"(?m)^version:\s*1\.4\.12\+36\s*$",
     "version: 1.4.15+39",
     pubspec_text,
     count=1,
 )
 if version_count != 1:
-    raise RuntimeError("Expected generated version 1.4.14+38 before setting 1.4.15+39")
+    raise RuntimeError("Expected generated version 1.4.12+36 before setting 1.4.15+39")
 pubspec.write_text(pubspec_text, encoding="utf-8")
 changes.append(str(pubspec.relative_to(project)))
 
@@ -3759,7 +3759,7 @@ if __import__('shutil').which('dart'):
 # VIN protocol regression tests: real OBD-II responses commonly span multiple
 # ISO-TP CAN frames. A partial first frame must never be accepted as a VIN.
 vin_protocol_test = project / "test/vin_protocol_test.dart"
-vin_protocol_test.write_text("""import 'package:flutter_test/flutter_test.dart';
+vin_protocol_test.write_text(r"""import 'package:flutter_test/flutter_test.dart';
 import 'package:torqscan/services/obd_protocol.dart';
 
 void main() {

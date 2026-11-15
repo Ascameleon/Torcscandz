@@ -7,15 +7,17 @@ s=pub.read_text()
 s2=s.replace('  flutter_bluetooth_serial_plus: ^0.5.6','  flutter_bluetooth_serial_plus: ^0.5.7')
 if '  bluetooth_spp:' not in s2:
     s2=s2.replace('  flutter_bluetooth_serial_plus: ^0.5.7','  flutter_bluetooth_serial_plus: ^0.5.7\n  bluetooth_spp: ^0.1.0')
+# permission_handler 12 pulls Android 14.1.1, whose Kotlin DSL is incompatible
+# with the extracted project's Gradle plugin configuration. Use the 11.x line.
+s2=re.sub(r'(?m)^  permission_handler: .*$', '  permission_handler: ^11.3.1', s2)
 if '  permission_handler:' not in s2:
-    s2=s2.replace('  bluetooth_spp: ^0.1.0','  bluetooth_spp: ^0.1.0\n  permission_handler: ^12.0.1')
-if s2==s or 'flutter_bluetooth_serial_plus: ^0.5.7' not in s2:
+    s2=s2.replace('  bluetooth_spp: ^0.1.0','  bluetooth_spp: ^0.1.0\n  permission_handler: ^11.3.1')
+if 'flutter_bluetooth_serial_plus: ^0.5.7' not in s2 or 'permission_handler: ^11.3.1' not in s2:
     raise SystemExit('pubspec Bluetooth dependency patch anchor mismatch')
 pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
-
 s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\nimport 'package:permission_handler/permission_handler.dart';")
 start=s.index('  Future<bool> requestPermissions() async {')
 end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
@@ -123,4 +125,4 @@ m=manifest.read_text()
 if 'android.permission.BLUETOOTH_SCAN' not in m:
     m=m.replace('    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />', '    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />')
 manifest.write_text(m)
-print('Bluetooth permissions, RFCOMM timeout and cleanup patched')
+print('Bluetooth permissions, RFCOMM timeout and cleanup patched; compatible permission_handler pinned')

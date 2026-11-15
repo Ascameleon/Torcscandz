@@ -69,6 +69,29 @@ jobs:
           echo "PROJECT_DIR=$project_dir" >> "$GITHUB_ENV"
           echo "Using Flutter project: $project_dir"
 
+      - name: Inspect Bluetooth implementation for targeted repair
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ['pubspec.yaml','lib/services/bluetooth_service.dart','lib/screens/home_screen.dart','android/app/src/main/AndroidManifest.xml']:
+              p=Path(name)
+              print('\\n===== '+name+' =====')
+              if p.exists():
+                  lines=p.read_text(errors='replace').splitlines()
+                  if name.endswith('home_screen.dart'):
+                      keys=(' _initBluetooth','_connectToDevice','_scanBluetooth','_devices','_connectionMode')
+                      indexes=[i for i,line in enumerate(lines) if any(k in line for k in keys)]
+                      spans=set()
+                      for i in indexes:
+                          spans.update(range(max(0,i-8),min(len(lines),i+45)))
+                      for i in sorted(spans): print(f'{i+1}: {lines[i]}')
+                  else:
+                      for i,line in enumerate(lines,1): print(f'{i}: {line}')
+              else: print('MISSING')
+          PY
+
       - name: Normalize Android Gradle configuration
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash

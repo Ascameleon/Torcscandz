@@ -42,7 +42,7 @@ jobs:
       - name: Set up Flutter stable
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: '3.35.7'
           cache: true
 
       - name: Extract Flutter project
@@ -326,7 +326,7 @@ jobs:
 
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release --no-pub --verbose --android-skip-build-dependency-validation
+        run: flutter build apk --release --no-pub --verbose
 
       - name: Sign APK for direct device testing
         working-directory: ${{ env.PROJECT_DIR }}

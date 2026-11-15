@@ -294,6 +294,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Repair Android Bluetooth RFCOMM permissions and lifecycle
+        run: python3 "$GITHUB_WORKSPACE/ci/patch_bluetooth.py" "$PROJECT_DIR"
+
       - name: Install Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get

@@ -47,6 +47,7 @@ method="""  Future<bool> requestPermissions() async {
       return false;
     }
   }
+"""
 s=s[:start]+method+s[end:]
 start=s.index('  Future<bool> connect(BluetoothDevice device) async {')
 end=s.index('\n  Future<bool> connectWifi(',start)

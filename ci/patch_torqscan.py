@@ -1803,7 +1803,7 @@ void main() {
     );
 
     expect(find.byType(SegmentedButton<String>), findsNothing);
-    final wifiButton = find.widgetWithText(OutlinedButton, 'Wi-Fi TCP');
+    final wifiButton = find.ancestor(\n      of: find.text('Wi-Fi TCP'),\n      matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),\n    );
     expect(wifiButton, findsOneWidget);
     expect(tester.getSize(wifiButton).height, greaterThanOrEqualTo(48));
     await tester.tap(wifiButton);
@@ -1847,7 +1847,7 @@ void main() {
     );
 
     expect(find.byType(SegmentedButton<String>), findsOneWidget);
-    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byWidgetPredicate((widget) => widget is FilledButton), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

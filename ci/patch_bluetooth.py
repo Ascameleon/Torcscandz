@@ -7,16 +7,19 @@ s=pub.read_text()
 s2=s.replace('  flutter_bluetooth_serial_plus: ^0.5.6','  flutter_bluetooth_serial_plus: ^0.5.7')
 if '  bluetooth_spp:' not in s2:
     s2=s2.replace('  flutter_bluetooth_serial_plus: ^0.5.7','  flutter_bluetooth_serial_plus: ^0.5.7\n  bluetooth_spp: ^0.1.0')
-s2=re.sub(r'^  permission_handler: .*\n','',s2,flags=re.M)
+if '  permission_handler:' not in s2:
+    s2=s2.replace('  bluetooth_spp: ^0.1.0','  bluetooth_spp: ^0.1.0\n  permission_handler: ^12.0.1')
 if s2==s or 'flutter_bluetooth_serial_plus: ^0.5.7' not in s2:
     raise SystemExit('pubspec Bluetooth dependency patch anchor mismatch')
 pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
-s=s.replace("import 'package:permission_handler/permission_handler.dart';\n",'')
-s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;")
-start=s.index('  Future<bool> requestPermissions() async {
+
+s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\nimport 'package:permission_handler/permission_handler.dart';")
+start=s.index('  Future<bool> requestPermissions() async {')
+end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
+method="""  Future<bool> requestPermissions() async {
     if (defaultTargetPlatform != TargetPlatform.android) return true;
     try {
       final status = await spp.BluetoothSpp.instance.permissionsStatus();
@@ -44,25 +47,6 @@ start=s.index('  Future<bool> requestPermissions() async {
       return false;
     }
   }
-\n  Future<bool> isBluetoothEnabled()',start)
-method="""  Future<bool> requestPermissions() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return true;
-    try {
-      final granted = await FlutterBluetoothSerial.instance.ensurePermissions();
-      if (!granted) {
-        _errorMessage = 'Autorisation Bluetooth refusée. Autorisez les appareils à proximité pour Dz Torqscan dans les paramètres Android.';
-        _state = BluetoothConnectionState.error;
-        notifyListeners();
-      }
-      return granted;
-    } catch (e) {
-      _errorMessage = 'Impossible d’obtenir les autorisations Bluetooth : $e';
-      _state = BluetoothConnectionState.error;
-      notifyListeners();
-      return false;
-    }
-  }
-"""
 s=s[:start]+method+s[end:]
 start=s.index('  Future<bool> connect(BluetoothDevice device) async {')
 end=s.index('\n  Future<bool> connectWifi(',start)

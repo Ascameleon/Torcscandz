@@ -501,8 +501,7 @@ write_method = """  Future<void> write(String data) async {
     if (connection == null || !connection.isConnected) {
       throw StateError('Adaptateur OBD2 non connecté');
     }
-    connection.output.add(bytes);
-    await connection.output.allSent;
+    await connection.write(bytes);
   }
 
 """

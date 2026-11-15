@@ -5,6 +5,8 @@ p=Path(sys.argv[1])
 pub=p/'pubspec.yaml'
 s=pub.read_text()
 s2=s.replace('  flutter_bluetooth_serial_plus: ^0.5.6','  flutter_bluetooth_serial_plus: ^0.5.7')
+if '  bluetooth_spp:' not in s2:
+    s2=s2.replace('  flutter_bluetooth_serial_plus: ^0.5.7','  flutter_bluetooth_serial_plus: ^0.5.7\\n  bluetooth_spp: ^0.1.0')
 s2=re.sub(r'^  permission_handler: .*\n','',s2,flags=re.M)
 if s2==s or 'flutter_bluetooth_serial_plus: ^0.5.7' not in s2:
     raise SystemExit('pubspec Bluetooth dependency patch anchor mismatch')
@@ -12,6 +14,7 @@ pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace("import 'package:permission_handler/permission_handler.dart';\n",'')
+s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;")
 start=s.index('  Future<bool> requestPermissions() async {')
 end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
 method="""  Future<bool> requestPermissions() async {
@@ -50,9 +53,9 @@ method="""  Future<bool> connect(BluetoothDevice device) async {
     _errorMessage = null;
     notifyListeners();
 
-    final pendingConnection = BluetoothConnection.toAddress(address);
+    final pendingConnection = spp.BluetoothSpp.instance.connect(\n      address,\n      timeout: const Duration(seconds: 20),\n      insecureFallback: true,\n      rfcommChannelFallback: true,\n    );
     try {
-      final connection = await pendingConnection.timeout(const Duration(seconds: 20));
+      final connection = await pendingConnection;
       if (!connection.isConnected) {
         await connection.close();
         throw StateError('Le canal RFCOMM n’est pas resté connecté.');

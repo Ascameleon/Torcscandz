@@ -320,7 +320,19 @@ jobs:
           test -s "$PROJECT_DIR/test/connection_endpoint_test.dart"
           cd "$PROJECT_DIR/.."
           zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$(basename "$PROJECT_DIR")"
-          unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -q '/torqscan-patch-report.json      - name: Build release APK
+          unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'torqscan-patch-report.json'
+          unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/obd_protocol_test.dart'
+          unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/connection_endpoint_test.dart'
+      - name: Upload patched source snapshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: torqscan-flutter-source-snapshot
+          path: ${{ github.workspace }}/torqscan-flutter-source.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter build apk --release --no-pub
 

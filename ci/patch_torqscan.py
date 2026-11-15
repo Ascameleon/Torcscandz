@@ -1863,8 +1863,8 @@ void main() {
     );
 
     expect(find.byType(SegmentedButton<String>), findsNothing);
-    expect(find.byType(FilledButton), findsOneWidget);
-    expect(find.byType(OutlinedButton), findsOneWidget);
+    expect(find.byWidgetPredicate((widget) => widget is FilledButton), findsOneWidget);
+    expect(find.byWidgetPredicate((widget) => widget is OutlinedButton), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -3725,7 +3725,7 @@ void main() {
     expect(find.text('Lecture réelle désactivée en mode démo.'), findsOneWidget);
     final buttonFinder = find.ancestor(
       of: find.text('Lire le VIN depuis le calculateur'),
-      matching: find.byType(FilledButton),
+      matching: find.byWidgetPredicate((widget) => widget is FilledButton),
     );
     expect(buttonFinder, findsOneWidget);
     expect(tester.widget<FilledButton>(buttonFinder).onPressed, isNull);

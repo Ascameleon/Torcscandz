@@ -8,6 +8,7 @@ on:
       - 'DzTorqscan_source_recovery_*.zip'
       - '.github/workflows/android-apk.yml'
       - 'ci/patch_torqscan.py'
+      - 'ci/patch_bluetooth.py'
   push:
     branches: [main]
     paths:
@@ -326,7 +327,7 @@ jobs:
 
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release --no-pub --verbose
+        run: flutter build apk --release --no-pub
 
       - name: Sign APK for direct device testing
         working-directory: ${{ env.PROJECT_DIR }}

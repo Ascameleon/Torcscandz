@@ -66,7 +66,12 @@ method="""  Future<bool> connect(BluetoothDevice device) async {
     _errorMessage = null;
     notifyListeners();
 
-    final pendingConnection = spp.BluetoothSpp.instance.connect(\n      address,\n      timeout: const Duration(seconds: 20),\n      insecureFallback: true,\n      rfcommChannelFallback: true,\n    );
+    final pendingConnection = spp.BluetoothSpp.instance.connect(
+      address,
+      timeout: const Duration(seconds: 20),
+      insecureFallback: true,
+      rfcommChannelFallback: true,
+    );
     try {
       final connection = await pendingConnection;
       if (!connection.isConnected) {

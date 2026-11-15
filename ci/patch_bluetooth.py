@@ -16,8 +16,35 @@ s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
 s=s.replace("import 'package:permission_handler/permission_handler.dart';\n",'')
 s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;")
-start=s.index('  Future<bool> requestPermissions() async {')
-end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
+start=s.index('  Future<bool> requestPermissions() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      final status = await spp.BluetoothSpp.instance.permissionsStatus();
+      if (status.allGranted) return true;
+      final requested = <Permission>[
+        if (status.sdkInt >= 31) ...[
+          Permission.bluetoothConnect,
+          Permission.bluetoothScan,
+        ] else
+          Permission.locationWhenInUse,
+      ];
+      await requested.request();
+      final refreshed = await spp.BluetoothSpp.instance.permissionsStatus();
+      if (!refreshed.allGranted) {
+        _errorMessage = 'Autorisations Bluetooth manquantes : ${refreshed.missing.join(', ')}';
+        _state = BluetoothConnectionState.error;
+        notifyListeners();
+        return false;
+      }
+      return true;
+    } catch (e) {
+      _errorMessage = 'Impossible d’obtenir les autorisations Bluetooth : $e';
+      _state = BluetoothConnectionState.error;
+      notifyListeners();
+      return false;
+    }
+  }
+\n  Future<bool> isBluetoothEnabled()',start)
 method="""  Future<bool> requestPermissions() async {
     if (defaultTargetPlatform != TargetPlatform.android) return true;
     try {

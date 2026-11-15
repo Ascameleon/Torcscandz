@@ -326,7 +326,7 @@ jobs:
 
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release --no-pub --verbose
+        run: flutter build apk --release --no-pub --verbose --android-skip-build-dependency-validation
 
       - name: Sign APK for direct device testing
         working-directory: ${{ env.PROJECT_DIR }}

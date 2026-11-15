@@ -6,7 +6,7 @@ pub=p/'pubspec.yaml'
 s=pub.read_text()
 s2=s.replace('  flutter_bluetooth_serial_plus: ^0.5.6','  flutter_bluetooth_serial_plus: ^0.5.7')
 if '  bluetooth_spp:' not in s2:
-    s2=s2.replace('  flutter_bluetooth_serial_plus: ^0.5.7','  flutter_bluetooth_serial_plus: ^0.5.7\\n  bluetooth_spp: ^0.1.0')
+    s2=s2.replace('  flutter_bluetooth_serial_plus: ^0.5.7','  flutter_bluetooth_serial_plus: ^0.5.7\n  bluetooth_spp: ^0.1.0')
 s2=re.sub(r'^  permission_handler: .*\n','',s2,flags=re.M)
 if s2==s or 'flutter_bluetooth_serial_plus: ^0.5.7' not in s2:
     raise SystemExit('pubspec Bluetooth dependency patch anchor mismatch')

@@ -16,6 +16,7 @@ on:
       - 'DzTorqscan_source_recovery_*.zip'
       - '.github/workflows/android-apk.yml'
       - 'ci/patch_torqscan.py'
+      - 'ci/patch_bluetooth.py'
   workflow_dispatch:
 
 permissions:

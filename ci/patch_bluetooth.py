@@ -13,8 +13,9 @@ if s2==s or 'flutter_bluetooth_serial_plus: ^0.5.7' not in s2:
 pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
+s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
 s=s.replace("import 'package:permission_handler/permission_handler.dart';\n",'')
-s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;")
+s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;")
 start=s.index('  Future<bool> requestPermissions() async {')
 end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
 method="""  Future<bool> requestPermissions() async {
@@ -80,6 +81,25 @@ method="""  Future<bool> connect(BluetoothDevice device) async {
   }
 """
 s=s[:start]+method+s[end:]
+write_start=s.index('  Future<void> write(String data) async {')
+write_end=s.index('\n  @override\n  void dispose()',write_start)
+write_method="""  Future<void> write(String data) async {
+    final bytes = Uint8List.fromList(data.codeUnits);
+    final socket = _wifiSocket;
+    if (socket != null) {
+      socket.add(bytes);
+      await socket.flush();
+      return;
+    }
+    final connection = _connection;
+    if (connection == null || !connection.isConnected) {
+      throw StateError('Adaptateur OBD2 non connecté');
+    }
+    await connection.write(bytes);
+  }
+
+"""
+s=s[:write_start]+write_method+s[write_end:]
 bt.write_text(s)
 manifest=p/'android/app/src/main/AndroidManifest.xml'
 m=manifest.read_text()

@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: torqscan-android-${{ github.ref }}
+  group: torqscan-android-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:

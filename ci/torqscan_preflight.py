@@ -136,6 +136,7 @@ for permission in (
     "android.permission.BLUETOOTH_SCAN",
     "android.permission.ACCESS_FINE_LOCATION",
     "android.permission.ACCESS_COARSE_LOCATION",
+    "android.permission.REQUEST_DISCOVERABLE",
 ):
     nodes = [
         node for tag in ("uses-permission", "uses-permission-sdk-23")
@@ -152,6 +153,7 @@ for permission in (
     "android.permission.BLUETOOTH_SCAN",
     "android.permission.ACCESS_FINE_LOCATION",
     "android.permission.ACCESS_COARSE_LOCATION",
+    "android.permission.REQUEST_DISCOVERABLE",
 ):
     direct_declarations = [
         node for tag in ("uses-permission", "uses-permission-sdk-23")
@@ -206,5 +208,5 @@ if errors:
     print("PREFLIGHT FAILED")
     print("\n".join(f"- {error}" for error in errors))
     sys.exit(1)
-print("PREFLIGHT PASSED: source, OBD protocol, Wi-Fi endpoint, DTC state, translated Wi-Fi UI, and least-privilege paired-device Bluetooth permissions.")
+print("PREFLIGHT PASSED: source, OBD protocol, Wi-Fi endpoint, DTC state, translated Wi-Fi UI, and least-privilege paired-device Bluetooth permissions (without scan, location or discoverability).")
 print("NOTE: Flutter CI and physical OBD2 testing remain separate validations.")

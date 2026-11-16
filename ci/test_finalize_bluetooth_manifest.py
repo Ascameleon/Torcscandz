@@ -15,6 +15,7 @@ REMOVED = (
     "android.permission.BLUETOOTH_SCAN",
     "android.permission.ACCESS_FINE_LOCATION",
     "android.permission.ACCESS_COARSE_LOCATION",
+    "android.permission.REQUEST_DISCOVERABLE",
 )
 
 
@@ -22,7 +23,7 @@ def run_finalizer(project: Path) -> None:
     subprocess.run([sys.executable, str(SCRIPT), str(project)], check=True, capture_output=True, text=True)
 
 
-def test_removes_direct_scan_and_location_permissions_and_is_idempotent() -> None:
+def test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         project = Path(temporary)
         manifest = project / "android/app/src/main/AndroidManifest.xml"
@@ -68,5 +69,5 @@ def test_removes_direct_scan_and_location_permissions_and_is_idempotent() -> Non
 
 
 if __name__ == "__main__":
-    test_removes_direct_scan_and_location_permissions_and_is_idempotent()
-    print("PASS: Android manifest finalizer removes unused permissions and is idempotent")
+    test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent()
+    print("PASS: Android manifest finalizer removes unused discovery/discoverability permissions and is idempotent")

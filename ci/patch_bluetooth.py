@@ -38,6 +38,8 @@ for import_uri in import_uris:
         + r"['\"][^;\r\n]*;[ \t]*(?:\r?\n|$)"
     )
     s = pattern.sub("", s)
+# Remove an import already re-exported by flutter/foundation.dart.
+s = re.sub(r"(?m)^[ \t]*import[ \t]+['\"]dart:typed_data['\"];[ \t]*(?:\r?\n|$)", "", s)
 first_import = re.search(r"(?m)^import[ \t]+.*?;[ \t]*$", s)
 if first_import is None:
     raise SystemExit("Bluetooth service has no import section")

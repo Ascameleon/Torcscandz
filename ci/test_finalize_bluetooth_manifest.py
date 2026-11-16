@@ -44,6 +44,10 @@ def test_removes_direct_scan_and_location_permissions_and_is_idempotent() -> Non
         run_finalizer(project)
         second = manifest.read_text(encoding="utf-8")
         assert first == second, "manifest finalization must be idempotent"
+        assert all(
+            line.startswith("    <uses-permission ") or not line.lstrip().startswith("<uses-permission ")
+            for line in first.splitlines()
+        ), "manifest permission elements must preserve consistent indentation"
 
         root = ET.parse(manifest).getroot()
         assert root.tag == "manifest"

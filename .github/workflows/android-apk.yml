@@ -410,8 +410,8 @@ jobs:
           printf '%s\n' "$permissions"
           grep -q 'android.permission.BLUETOOTH_CONNECT' <<< "$permissions"
           grep -q 'android.permission.INTERNET' <<< "$permissions"
-          if grep -Eq 'android.permission.BLUETOOTH_SCAN|android.permission.ACCESS_FINE_LOCATION|android.permission.ACCESS_COARSE_LOCATION' <<< "$permissions"; then
-            echo '::error::Paired-device-only APK unexpectedly requests scan or location permission.'
+          if grep -Eq 'android.permission.BLUETOOTH_SCAN|android.permission.ACCESS_FINE_LOCATION|android.permission.ACCESS_COARSE_LOCATION|android.permission.REQUEST_DISCOVERABLE' <<< "$permissions"; then
+            echo '::error::Paired-device-only APK unexpectedly requests scan, location or discoverability permission.'
             exit 1
           fi
           unzip -t "$apk" >/dev/null

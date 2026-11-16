@@ -3880,6 +3880,13 @@ for old, new in home_replacements:
     elif new not in home_text:
         raise SystemExit("Wi-Fi UI localization anchor mismatch: " + old)
 
+mounted_guard_old = "      await bt.disconnect();\n      setState(() => _obdReady = false);"
+mounted_guard_new = "      await bt.disconnect();\n      if (!mounted) return;\n      setState(() => _obdReady = false);"
+if mounted_guard_old in home_text:
+    home_text = home_text.replace(mounted_guard_old, mounted_guard_new, 1)
+elif mounted_guard_new not in home_text:
+    raise SystemExit("OBD initialization failure path mounted guard anchor mismatch")
+
 wifi_hint = """                          const SizedBox(height: 8),
                           Align(
                             alignment: AlignmentDirectional.centerStart,

@@ -10,6 +10,8 @@ on:
       - 'ci/patch_torqscan.py'
       - 'ci/patch_bluetooth.py'
       - 'ci/torqscan_preflight.py'
+      - 'ci/finalize_bluetooth_manifest.py'
+      - 'ci/test_finalize_bluetooth_manifest.py'
   push:
     branches: [main]
     paths:
@@ -19,6 +21,8 @@ on:
       - 'ci/patch_torqscan.py'
       - 'ci/patch_bluetooth.py'
       - 'ci/torqscan_preflight.py'
+      - 'ci/finalize_bluetooth_manifest.py'
+      - 'ci/test_finalize_bluetooth_manifest.py'
   workflow_dispatch:
 
 permissions:
@@ -291,6 +295,11 @@ jobs:
 
       - name: Apply audited Dart source fixes
         run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+      - name: Test and finalize paired-device Android manifest permissions
+        run: |
+          python3 "$GITHUB_WORKSPACE/ci/test_finalize_bluetooth_manifest.py"
+          python3 "$GITHUB_WORKSPACE/ci/finalize_bluetooth_manifest.py" "$PROJECT_DIR"
+
       - name: Run source-only TorqScan preflight
         run: python3 "$GITHUB_WORKSPACE/ci/torqscan_preflight.py" "$PROJECT_DIR"
 

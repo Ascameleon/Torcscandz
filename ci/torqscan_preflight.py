@@ -69,6 +69,14 @@ for token in ["_bluetooth.markTransportEnded(reason: _lastError, failed: true)",
         errors.append(f"Missing OBD stream/disconnect recovery: {token}")
 
 transport = source("lib/services/bluetooth_service.dart")
+for import_line in (
+    "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';",
+    "import 'package:bluetooth_spp/bluetooth_spp.dart' as spp;",
+    "import 'package:permission_handler/permission_handler.dart';",
+    "import 'bluetooth_permission_policy.dart';",
+):
+    if transport.count(import_line) != 1:
+        errors.append(f"Bluetooth service import must occur exactly once: {import_line}")
 if "void markTransportEnded({String? reason, bool failed = false})" not in transport:
     errors.append("Transport EOF/error state synchronizer missing")
 if not re.search(r"_state\s*=\s*failed\s*\?\s*BluetoothConnectionState\.error\s*:\s*BluetoothConnectionState\.disconnected", transport):

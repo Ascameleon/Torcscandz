@@ -70,6 +70,6 @@ if REPORT.is_file():
     if not isinstance(files, dict) or relative_manifest not in files:
         raise SystemExit("TorqScan patch report has no Android manifest hash to refresh")
     files[relative_manifest] = hashlib.sha256(MANIFEST.read_bytes()).hexdigest()
-    REPORT.write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+    REPORT.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 print("Verified paired-device-only manifest: CONNECT retained; SCAN, location and discoverability removed")

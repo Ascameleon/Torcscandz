@@ -342,7 +342,18 @@ jobs:
           test -s "$PROJECT_DIR/test/obd_protocol_test.dart"
           test -s "$PROJECT_DIR/test/connection_endpoint_test.dart"
           cd "$PROJECT_DIR/.."
-          zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$(basename "$PROJECT_DIR")"
+          project_name="$(basename "$PROJECT_DIR")"
+          zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$project_name" \
+            -x "$project_name/build/*" \
+               "$project_name/.dart_tool/*" \
+               "$project_name/android/.gradle/*" \
+               "$project_name/android/local.properties" \
+               "$project_name/.flutter-plugins" \
+               "$project_name/.flutter-plugins-dependencies"
+          if unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Eq '(^|/)(build|.dart_tool|.gradle)/'; then
+            echo '::error::Generated Flutter/Gradle build caches must not be included in the source snapshot.' >&2
+            exit 1
+          fi
           unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'torqscan-patch-report.json'
           unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/obd_protocol_test.dart'
           unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/connection_endpoint_test.dart'

@@ -294,10 +294,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'connection.output.add(bytes);' "$PROJECT_DIR/lib/services/bluetooth_service.dart"
-          grep -Fq 'await connection.output.allSent;' "$PROJECT_DIR/lib/services/bluetooth_service.dart"
-          if grep -Fq 'connection.write(bytes)' "$PROJECT_DIR/lib/services/bluetooth_service.dart"; then
-            echo 'Unsupported BluetoothConnection.write call remains' >&2
+          grep -Fq 'await connection.write(bytes);' "$PROJECT_DIR/lib/services/bluetooth_service.dart"
+          if grep -Fq 'connection.output.add(bytes)' "$PROJECT_DIR/lib/services/bluetooth_service.dart"; then
+            echo 'Legacy output sink call remains after migration to SppConnection' >&2
             exit 1
           fi
 

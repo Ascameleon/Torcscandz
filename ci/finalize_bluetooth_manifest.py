@@ -25,6 +25,7 @@ permissions = (
     "android.permission.BLUETOOTH_SCAN",
     "android.permission.ACCESS_FINE_LOCATION",
     "android.permission.ACCESS_COARSE_LOCATION",
+    "android.permission.REQUEST_DISCOVERABLE",
 )
 for permission in permissions:
     # Restrict whitespace to the current line; \s would consume indentation
@@ -48,8 +49,8 @@ for line in remove_lines:
     if line not in content:
         content = content.replace(connect, connect + "\n" + line, 1)
 if any(content.count(line) != 1 for line in remove_lines):
-    raise SystemExit("Bluetooth scan/location removal markers are missing or duplicated")
+    raise SystemExit("Unused Bluetooth permission removal markers are missing or duplicated")
 
 MANIFEST.write_text(content, encoding="utf-8")
 ET.parse(MANIFEST)
-print("Verified paired-device-only manifest: CONNECT retained; SCAN and location removed")
+print("Verified paired-device-only manifest: CONNECT retained; SCAN, location and discoverability removed")

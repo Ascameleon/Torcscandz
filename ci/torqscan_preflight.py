@@ -77,6 +77,8 @@ for import_line in (
 ):
     if transport.count(import_line) != 1:
         errors.append(f"Bluetooth service import must occur exactly once: {import_line}")
+if "import 'dart:typed_data';" in transport:
+    errors.append("Unnecessary dart:typed_data import remains; foundation.dart already exports Uint8List")
 if "void markTransportEnded({String? reason, bool failed = false})" not in transport:
     errors.append("Transport EOF/error state synchronizer missing")
 if not re.search(r"_state\s*=\s*failed\s*\?\s*BluetoothConnectionState\.error\s*:\s*BluetoothConnectionState\.disconnected", transport):
@@ -90,6 +92,8 @@ for token in ["socket.add(bytes)", "Stream<Uint8List>? get inputStream", "Connec
         errors.append(f"Wi-Fi transport safeguard missing: {token}")
 
 home = source("lib/screens/home_screen.dart")
+if "await bt.disconnect();\n      if (!mounted) return;\n      setState(() => _obdReady = false);" not in home:
+    errors.append("OBD initialization failure path must re-check mounted after disconnect")
 if r"\${tr(context, 'wifi_connect_failed')}" in home:
     errors.append("Wi-Fi error interpolation is escaped and breaks Dart string quoting")
 if 'Text("${tr(context, \'wifi_connect_failed\')}: $error")' not in home:

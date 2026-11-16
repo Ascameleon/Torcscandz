@@ -172,5 +172,7 @@ for remove_line in remove_lines:
 if any(m.count(remove_line) != 1 for remove_line in remove_lines):
     raise SystemExit('Bluetooth scan/location permissions were not removed exactly once')
 import xml.etree.ElementTree as ET
+ET.fromstring(m)
+manifest.write_text(m, encoding='utf-8')
 ET.parse(manifest)
-print('Bluetooth paired-device least-privilege permissions, RFCOMM timeout and cleanup patched; permission policy tests installed')
+print('Bluetooth paired-device least-privilege manifest written and parsed; RFCOMM timeout and cleanup patched; permission policy tests installed')

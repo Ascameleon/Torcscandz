@@ -142,7 +142,7 @@ void main() {
 
 manifest=p/'android/app/src/main/AndroidManifest.xml'
 m=manifest.read_text()
-root_match=re.search(r'<manifest\\b[^>]*>', m, re.S)
+root_match=re.search(r'<manifest\b[^>]*>', m, re.S)
 if root_match is None:
     raise SystemExit('Android manifest root element not found')
 root_tag=root_match.group(0)
@@ -151,13 +151,13 @@ if 'xmlns:tools=' not in root_tag:
     m=m[:root_match.start()]+updated_root+m[root_match.end():]
 # This app connects only to already-paired SPP adapters; it never discovers devices.
 # Remove BLUETOOTH_SCAN declarations contributed by plugin manifests.
-m=re.sub(r'(?m)^\\s*<uses-permission\\b(?=[^>]*android:name="android\\.permission\\.BLUETOOTH_SCAN")[^>]*/>\\s*\\n?', '', m)
+m=re.sub(r'(?m)^\s*<uses-permission\b(?=[^>]*android:name="android\.permission\.BLUETOOTH_SCAN")[^>]*/>\s*\n?', '', m)
 remove_scan='    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" tools:node="remove" />'
 if remove_scan not in m:
     connect='    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />'
     if connect not in m:
         raise SystemExit('BLUETOOTH_CONNECT manifest anchor not found')
-    m=m.replace(connect, connect+'\\n'+remove_scan, 1)
+    m=m.replace(connect, connect+'\n'+remove_scan, 1)
 if 'android.permission.BLUETOOTH_SCAN' in m and m.count('tools:node="remove"') != 1:
     raise SystemExit('Unexpected Bluetooth SCAN manifest declaration remains')
 manifest.write_text(m)

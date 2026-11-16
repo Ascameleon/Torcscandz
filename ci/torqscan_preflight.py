@@ -120,13 +120,18 @@ if "android.permission.BLUETOOTH_CONNECT" not in manifest_text:
 manifest_root = ET.parse(manifest).getroot()
 android_ns = "{http://schemas.android.com/apk/res/android}"
 tools_ns = "{http://schemas.android.com/tools}"
-scan_nodes = [
-    node for tag in ("uses-permission", "uses-permission-sdk-23")
-    for node in manifest_root.findall(tag)
-    if node.get(android_ns + "name") == "android.permission.BLUETOOTH_SCAN"
-]
-if len(scan_nodes) != 1 or scan_nodes[0].get(tools_ns + "node") != "remove":
-    errors.append("Paired-device-only flow must remove unused BLUETOOTH_SCAN from the merged manifest")
+for permission in (
+    "android.permission.BLUETOOTH_SCAN",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION",
+):
+    nodes = [
+        node for tag in ("uses-permission", "uses-permission-sdk-23")
+        for node in manifest_root.findall(tag)
+        if node.get(android_ns + "name") == permission
+    ]
+    if len(nodes) != 1 or nodes[0].get(tools_ns + "node") != "remove":
+        errors.append(f"Paired-device-only flow must remove unused {permission} from the merged manifest")
 if "android.permission.INTERNET" not in manifest_text:
     errors.append("Android INTERNET permission missing for Wi-Fi TCP")
 if "android.hardware.bluetooth\" android:required=\"false\"" not in manifest_text:

@@ -27,10 +27,12 @@ permissions = (
     "android.permission.ACCESS_COARSE_LOCATION",
 )
 for permission in permissions:
+    # Restrict whitespace to the current line; \s would consume indentation
+    # from the following XML element and make repeated runs non-idempotent.
     pattern = re.compile(
-        r'(?m)^\s*<uses-permission\b(?=[^>]*android:name="'
+        r'(?m)^[ \t]*<uses-permission\b(?=[^>]*android:name="'
         + re.escape(permission)
-        + r'")[^>]*/>\s*\n?'
+        + r'")[^>]*/>[ \t]*(?:\r?\n|$)'
     )
     content = pattern.sub("", content)
 

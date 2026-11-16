@@ -2,6 +2,8 @@
 """Regression tests for the final Android paired-device permission manifest."""
 from __future__ import annotations
 
+import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -39,12 +41,31 @@ def test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent() -> N
 """,
             encoding="utf-8",
         )
+        report_path = project / "torqscan-patch-report.json"
+        report_path.write_text(
+            json.dumps({
+                "files": {
+                    "android/app/src/main/AndroidManifest.xml":
+                        hashlib.sha256(manifest.read_bytes()).hexdigest()
+                }
+            }),
+            encoding="utf-8",
+        )
 
         run_finalizer(project)
+        first_report = json.loads(report_path.read_text(encoding="utf-8"))
+        expected_manifest_hash = hashlib.sha256(manifest.read_bytes()).hexdigest()
+        assert first_report["files"]["android/app/src/main/AndroidManifest.xml"] == expected_manifest_hash, (
+            "final manifest hash must be refreshed in the patch report"
+        )
+        first_report_text = report_path.read_text(encoding="utf-8")
         first = manifest.read_text(encoding="utf-8")
         run_finalizer(project)
         second = manifest.read_text(encoding="utf-8")
         assert first == second, "manifest finalization must be idempotent"
+        assert report_path.read_text(encoding="utf-8") == first_report_text, (
+            "manifest patch-report hash must remain stable on repeated finalization"
+        )
         assert all(
             line.startswith("    <uses-permission ") or not line.lstrip().startswith("<uses-permission ")
             for line in first.splitlines()

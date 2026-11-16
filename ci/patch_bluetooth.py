@@ -150,17 +150,27 @@ if 'xmlns:tools=' not in root_tag:
     updated_root=root_tag[:-1]+' xmlns:tools="http://schemas.android.com/tools">'
     m=m[:root_match.start()]+updated_root+m[root_match.end():]
 # This app connects only to already-paired SPP adapters; it never discovers devices.
-# Remove BLUETOOTH_SCAN declarations contributed by plugin manifests.
-m=re.sub(r'(?m)^\s*<uses-permission\b(?=[^>]*android:name="android\.permission\.BLUETOOTH_SCAN")[^>]*/>\s*\n?', '', m)
-remove_scan='    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" tools:node="remove" />'
-if remove_scan not in m:
-    connect='    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />'
-    if connect not in m:
-        raise SystemExit('BLUETOOTH_CONNECT manifest anchor not found')
-    m=m.replace(connect, connect+'\n'+remove_scan, 1)
-if 'android.permission.BLUETOOTH_SCAN' in m and m.count('tools:node="remove"') != 1:
-    raise SystemExit('Unexpected Bluetooth SCAN manifest declaration remains')
-manifest.write_text(m)
+# Remove scan/location declarations contributed by plugin manifests.
+for permission in (
+    'android.permission.BLUETOOTH_SCAN',
+    'android.permission.ACCESS_FINE_LOCATION',
+    'android.permission.ACCESS_COARSE_LOCATION',
+):
+    pattern = r'(?m)^\\s*<uses-permission\\b(?=[^>]*android:name="' + re.escape(permission) + r'")[^>]*/>\\s*\\n?'
+    m = re.sub(pattern, '', m)
+remove_lines = [
+    '    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" tools:node="remove" />',
+    '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />',
+    '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />',
+]
+connect='    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />'
+if connect not in m:
+    raise SystemExit('BLUETOOTH_CONNECT manifest anchor not found')
+for remove_line in remove_lines:
+    if remove_line not in m:
+        m=m.replace(connect, connect+'\\n'+remove_line, 1)
+if any(m.count(remove_line) != 1 for remove_line in remove_lines):
+    raise SystemExit('Bluetooth scan/location permissions were not removed exactly once')
 import xml.etree.ElementTree as ET
 ET.parse(manifest)
 print('Bluetooth paired-device least-privilege permissions, RFCOMM timeout and cleanup patched; permission policy tests installed')

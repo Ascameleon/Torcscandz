@@ -9,6 +9,7 @@ on:
       - '.github/workflows/android-apk.yml'
       - 'ci/patch_torqscan.py'
       - 'ci/patch_bluetooth.py'
+      - 'ci/torqscan_preflight.py'
   push:
     branches: [main]
     paths:

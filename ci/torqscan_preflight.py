@@ -82,6 +82,10 @@ for token in ["socket.add(bytes)", "Stream<Uint8List>? get inputStream", "Connec
         errors.append(f"Wi-Fi transport safeguard missing: {token}")
 
 home = source("lib/screens/home_screen.dart")
+if r"\${tr(context, 'wifi_connect_failed')}" in home:
+    errors.append("Wi-Fi error interpolation is escaped and breaks Dart string quoting")
+if 'Text("${tr(context, \'wifi_connect_failed\')}: $error")' not in home:
+    errors.append("Wi-Fi failure message is not safely localized")
 for key in ["connection_mode", "wifi_host", "wifi_port", "connect_wifi", "wifi_hint", "wifi_invalid", "wifi_connect_failed"]:
     if f"tr(context, '{key}')" not in home:
         errors.append(f"Wi-Fi UI is not localized through {key}")

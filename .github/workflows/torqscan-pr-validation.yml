@@ -13,6 +13,9 @@ on:
       - "ci/torqscan_tests/**"
       - "ci/patch_torqscan.py"
       - "ci/patch_bluetooth.py"
+      - "ci/torqscan_preflight.py"
+      - "ci/finalize_bluetooth_manifest.py"
+      - "ci/test_finalize_bluetooth_manifest.py"
       - "DzTorqscan_v1.4.0_complete.zip"
       - "DzTorqscan_source_recovery_*.zip"
 
@@ -30,13 +33,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Validate Android release workflow YAML
         run: ruby -e 'require "yaml"; YAML.load_file(".github/workflows/android-apk.yml")'
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -77,6 +80,11 @@ jobs:
           set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/patch_bluetooth.py" "$PROJECT_DIR"
           python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+
+      - name: Test and finalize paired-device Android manifest permissions
+        run: |
+          python3 "$GITHUB_WORKSPACE/ci/test_finalize_bluetooth_manifest.py"
+          python3 "$GITHUB_WORKSPACE/ci/finalize_bluetooth_manifest.py" "$PROJECT_DIR"
 
       - name: Run source-only TorqScan preflight
         run: python3 "$GITHUB_WORKSPACE/ci/torqscan_preflight.py" "$PROJECT_DIR"

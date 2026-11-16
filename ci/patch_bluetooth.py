@@ -18,19 +18,30 @@ pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
-anchor = "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';"
-if s.count(anchor) != 1:
-    raise SystemExit("Bluetooth service import anchor changed")
 required_imports = (
+    "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';",
     "import 'package:bluetooth_spp/bluetooth_spp.dart' as spp;",
     "import 'package:permission_handler/permission_handler.dart';",
     "import 'bluetooth_permission_policy.dart';",
 )
-# Normalize pre-existing imports before inserting them so source archives
-# that already contain a dependency import cannot create duplicates.
-for import_line in required_imports:
-    s = re.sub(r"(?m)^[ \t]*" + re.escape(import_line) + r"[ \t]*\r?\n", "", s)
-s = s.replace(anchor, anchor + "\n" + "\n".join(required_imports), 1)
+import_uris = (
+    "package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart",
+    "package:bluetooth_spp/bluetooth_spp.dart",
+    "package:permission_handler/permission_handler.dart",
+    "bluetooth_permission_policy.dart",
+)
+# Normalize by library URI, not the full import directive: the recovered
+# archive may already import the same library with a show/as clause.
+for import_uri in import_uris:
+    pattern = re.compile(
+        r"(?m)^[ \t]*import[ \t]+['\"]" + re.escape(import_uri)
+        + r"['\"][^;\r\n]*;[ \t]*(?:\r?\n|$)"
+    )
+    s = pattern.sub("", s)
+first_import = re.search(r"(?m)^import[ \t]+.*?;[ \t]*$", s)
+if first_import is None:
+    raise SystemExit("Bluetooth service has no import section")
+s = s[:first_import.end()] + "\n" + "\n".join(required_imports) + s[first_import.end():]
 if any(s.count(import_line) != 1 for import_line in required_imports):
     raise SystemExit("Bluetooth service imports are missing or duplicated")
 start=s.index('  Future<bool> requestPermissions() async {')

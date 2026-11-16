@@ -18,7 +18,21 @@ pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
-s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\nimport 'package:permission_handler/permission_handler.dart';\nimport 'bluetooth_permission_policy.dart';")
+anchor = "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';"
+if s.count(anchor) != 1:
+    raise SystemExit("Bluetooth service import anchor changed")
+required_imports = (
+    "import 'package:bluetooth_spp/bluetooth_spp.dart' as spp;",
+    "import 'package:permission_handler/permission_handler.dart';",
+    "import 'bluetooth_permission_policy.dart';",
+)
+# Normalize pre-existing imports before inserting them so source archives
+# that already contain a dependency import cannot create duplicates.
+for import_line in required_imports:
+    s = re.sub(r"(?m)^[ \t]*" + re.escape(import_line) + r"[ \t]*\r?\n", "", s)
+s = s.replace(anchor, anchor + "\n" + "\n".join(required_imports), 1)
+if any(s.count(import_line) != 1 for import_line in required_imports):
+    raise SystemExit("Bluetooth service imports are missing or duplicated")
 start=s.index('  Future<bool> requestPermissions() async {')
 end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
 method="""  Future<bool> requestPermissions() async {

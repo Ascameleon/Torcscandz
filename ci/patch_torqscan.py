@@ -3822,6 +3822,107 @@ if __import__('shutil').which('dart'):
     subprocess.run(["dart", "format", str(vin_protocol_test)], check=True, cwd=project)
 
 
+
+# Keep the Wi-Fi connection UI translated in French, English and Arabic.
+settings_file = project / "lib/core/app_settings.dart"
+settings_text = settings_file.read_text(encoding="utf-8")
+if settings_text.count("'wifi_invalid':") == 0:
+    anchors = list(re.finditer(r"(?m)^(\s*)'bluetooth_help'\s*:", settings_text))
+    if len(anchors) != 3:
+        raise SystemExit("Wi-Fi error translation insertion expected three locale blocks")
+    locale_values = [
+        {"wifi_invalid": "Adresse IP ou port TCP invalide.", "wifi_connect_failed": "Connexion Wi-Fi impossible"},
+        {"wifi_invalid": "Invalid adapter IP address or TCP port.", "wifi_connect_failed": "Wi-Fi connection failed"},
+        {"wifi_invalid": "عنوان IP أو منفذ TCP غير صالح.", "wifi_connect_failed": "تعذر الاتصال عبر Wi-Fi"},
+    ]
+    for match, values in reversed(list(zip(anchors, locale_values))):
+        indent = match.group(1)
+        insertion = "\n".join(
+            indent + "'" + key + "': " + json.dumps(value, ensure_ascii=False) + ","
+            for key, value in values.items()
+        ) + "\n"
+        settings_text = settings_text[:match.start()] + insertion + settings_text[match.start():]
+elif settings_text.count("'wifi_invalid':") != 3 or settings_text.count("'wifi_connect_failed':") != 3:
+    raise SystemExit("Partial Wi-Fi error translation insertion detected")
+settings_file.write_text(settings_text, encoding="utf-8")
+
+home = project / "lib/screens/home_screen.dart"
+home_text = home.read_text(encoding="utf-8")
+home_replacements = [
+    ("'CONNEXION À L’ADAPTATEUR'", "tr(context, 'connection_mode').toUpperCase()"),
+    (
+        """decoration: const InputDecoration(
+                              labelText: 'Adresse IP de l’adaptateur',
+                              prefixIcon: Icon(Icons.router),
+                            ),""",
+        """decoration: InputDecoration(
+                              labelText: tr(context, 'wifi_host'),
+                              prefixIcon: const Icon(Icons.router),
+                            ),""",
+    ),
+    (
+        """decoration: const InputDecoration(
+                              labelText: 'Port TCP',
+                              prefixIcon: Icon(Icons.settings_ethernet),
+                            ),""",
+        """decoration: InputDecoration(
+                              labelText: tr(context, 'wifi_port'),
+                              prefixIcon: const Icon(Icons.settings_ethernet),
+                            ),""",
+    ),
+    ("label: const Text('Connecter en Wi-Fi')", "label: Text(tr(context, 'connect_wifi'))"),
+    ("const SnackBar(content: Text('Adresse IP ou port TCP invalide.'))", "SnackBar(content: Text(tr(context, 'wifi_invalid')))"),
+    ("SnackBar(content: Text('Connexion Wi-Fi : $error'))", "SnackBar(content: Text('\${tr(context, 'wifi_connect_failed')}: $error'))"),
+]
+for old, new in home_replacements:
+    if old in home_text:
+        home_text = home_text.replace(old, new, 1)
+    elif new not in home_text:
+        raise SystemExit("Wi-Fi UI localization anchor mismatch: " + old)
+
+wifi_hint = """                          const SizedBox(height: 8),
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              tr(context, 'wifi_hint'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon("""
+wifi_button_anchor = """                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon("""
+if "tr(context, 'wifi_hint')" not in home_text:
+    if home_text.count(wifi_button_anchor) != 1:
+        raise SystemExit("Wi-Fi hint/button insertion anchor mismatch")
+    home_text = home_text.replace(wifi_button_anchor, wifi_hint, 1)
+home.write_text(home_text, encoding="utf-8")
+
+# Install the source-only preflight into the restored Flutter project.
+preflight_source = Path(__file__).with_name("torqscan_preflight.py")
+if not preflight_source.is_file():
+    raise SystemExit("ci/torqscan_preflight.py is missing")
+preflight_target = project / "scripts/preflight.py"
+preflight_target.parent.mkdir(parents=True, exist_ok=True)
+preflight_target.write_text(preflight_source.read_text(encoding="utf-8"), encoding="utf-8")
+
+for rel in [
+    "pubspec.yaml",
+    "android/app/src/main/AndroidManifest.xml",
+    "lib/services/bluetooth_service.dart",
+    "lib/services/bluetooth_permission_policy.dart",
+    "test/bluetooth_permission_policy_test.dart",
+    "lib/core/app_settings.dart",
+    "lib/screens/home_screen.dart",
+    "scripts/preflight.py",
+]:
+    if rel not in changes:
+        changes.append(rel)
+
 report = {
     "patch": "torqscan-vin-isotp-reassembly-v1",
     "vin_decoder": "SAE J1979 Mode 09 PID 02; ISO-TP multi-frame reassembly across ELM327 lines; ECU-ID isolation; 17-character ISO 3779 validation; no automatic engine fitment",

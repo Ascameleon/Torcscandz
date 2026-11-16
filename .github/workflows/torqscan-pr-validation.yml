@@ -12,6 +12,7 @@ on:
       - ".github/workflows/torqscan-pr-validation.yml"
       - "ci/torqscan_tests/**"
       - "ci/patch_torqscan.py"
+      - "ci/patch_bluetooth.py"
       - "DzTorqscan_v1.4.0_complete.zip"
       - "DzTorqscan_source_recovery_*.zip"
 
@@ -71,7 +72,21 @@ jobs:
         run: flutter pub get
 
       - name: Apply audited Dart source fixes
-        run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/ci/patch_bluetooth.py" "$PROJECT_DIR"
+          python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+
+      - name: Verify Bluetooth RFCOMM write API
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'await connection.write(bytes);' "$PROJECT_DIR/lib/services/bluetooth_service.dart"
+          if grep -Fq 'connection.output.add(bytes)' "$PROJECT_DIR/lib/services/bluetooth_service.dart"; then
+            echo 'Legacy output sink call remains after migration to SppConnection' >&2
+            exit 1
+          fi
 
       - name: Install retained regression tests
         shell: bash

@@ -18,7 +18,7 @@ pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
-s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\\nimport 'package:permission_handler/permission_handler.dart';\\nimport 'bluetooth_permission_policy.dart';")
+s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\nimport 'package:permission_handler/permission_handler.dart';\nimport 'bluetooth_permission_policy.dart';")
 start=s.index('  Future<bool> requestPermissions() async {')
 end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
 method="""  Future<bool> requestPermissions() async {

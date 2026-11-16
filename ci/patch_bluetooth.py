@@ -18,32 +18,24 @@ pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
-s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\nimport 'package:permission_handler/permission_handler.dart';")
+s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\\nimport 'package:permission_handler/permission_handler.dart';\\nimport 'bluetooth_permission_policy.dart';")
 start=s.index('  Future<bool> requestPermissions() async {')
 end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
 method="""  Future<bool> requestPermissions() async {
     if (defaultTargetPlatform != TargetPlatform.android) return true;
     try {
       final status = await spp.BluetoothSpp.instance.permissionsStatus();
-      if (status.allGranted) return true;
-      final requested = <Permission>[
-        if (status.sdkInt >= 31) ...[
-          Permission.bluetoothConnect,
-          Permission.bluetoothScan,
-        ] else
-          Permission.locationWhenInUse,
-      ];
-      await requested.request();
-      final refreshed = await spp.BluetoothSpp.instance.permissionsStatus();
-      if (!refreshed.allGranted) {
-        _errorMessage = 'Autorisations Bluetooth manquantes : ${refreshed.missing.join(', ')}';
+      if (!requiresBluetoothConnectPermission(status.sdkInt)) return true;
+      final permission = await Permission.bluetoothConnect.request();
+      if (!permission.isGranted) {
+        _errorMessage = 'Autorisation Bluetooth CONNECT manquante.';
         _state = BluetoothConnectionState.error;
         notifyListeners();
         return false;
       }
       return true;
     } catch (e) {
-      _errorMessage = 'Impossible d’obtenir les autorisations Bluetooth : $e';
+      _errorMessage = 'Impossible d’obtenir l’autorisation Bluetooth CONNECT : $e';
       _state = BluetoothConnectionState.error;
       notifyListeners();
       return false;
@@ -120,9 +112,37 @@ write_method="""  Future<void> write(String data) async {
 """
 s=s[:write_start]+write_method+s[write_end:]
 bt.write_text(s)
+
+policy=p/'lib/services/bluetooth_permission_policy.dart'
+policy.parent.mkdir(parents=True, exist_ok=True)
+policy.write_text("""/// Paired-device SPP access needs BLUETOOTH_CONNECT on Android 12+ only.
+/// BLUETOOTH_SCAN is reserved for discovery, which this app does not perform.
+bool requiresBluetoothConnectPermission(int sdkInt) => sdkInt >= 31;
+""")
+
+policy_test=p/'test/bluetooth_permission_policy_test.dart'
+policy_test.parent.mkdir(parents=True, exist_ok=True)
+policy_test.write_text("""import 'package:flutter_test/flutter_test.dart';
+import 'package:torqscan/services/bluetooth_permission_policy.dart';
+
+void main() {
+  group('paired-device Bluetooth permission policy', () {
+    test('does not request runtime scan/location permission on Android 11 and earlier', () {
+      expect(requiresBluetoothConnectPermission(23), isFalse);
+      expect(requiresBluetoothConnectPermission(30), isFalse);
+    });
+
+    test('requires only Bluetooth CONNECT on Android 12 and later', () {
+      expect(requiresBluetoothConnectPermission(31), isTrue);
+      expect(requiresBluetoothConnectPermission(35), isTrue);
+    });
+  });
+}
+""")
+
 manifest=p/'android/app/src/main/AndroidManifest.xml'
 m=manifest.read_text()
 if 'android.permission.BLUETOOTH_SCAN' not in m:
     m=m.replace('    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />', '    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />')
 manifest.write_text(m)
-print('Bluetooth permissions, RFCOMM timeout and cleanup patched; compatible permission_handler pinned')
+print('Bluetooth paired-device least-privilege permissions, RFCOMM timeout and cleanup patched; permission policy tests installed')

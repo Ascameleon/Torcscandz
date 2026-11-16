@@ -280,22 +280,6 @@ jobs:
           chmod +x android/gradlew
           cat "$wrapper"
 
-      - name: Preserve extracted Flutter source for audited customization
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR/.."
-          zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$(basename "$PROJECT_DIR")"
-      - name: Upload extracted source snapshot
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: torqscan-flutter-source-snapshot
-          path: ${{ github.workspace }}/torqscan-flutter-source.zip
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Repair Android Bluetooth RFCOMM permissions and lifecycle
         run: python3 "$GITHUB_WORKSPACE/ci/patch_bluetooth.py" "$PROJECT_DIR"
 
@@ -305,6 +289,16 @@ jobs:
 
       - name: Apply audited Dart source fixes
         run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+
+      - name: Verify Bluetooth RFCOMM write API
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'await connection.write(bytes);' "$PROJECT_DIR/lib/services/bluetooth_service.dart"
+          if grep -Fq 'connection.output.add(bytes)' "$PROJECT_DIR/lib/services/bluetooth_service.dart"; then
+            echo 'Legacy output sink call remains after migration to SppConnection' >&2
+            exit 1
+          fi
 
       - name: Analyze Dart
         working-directory: ${{ env.PROJECT_DIR }}
@@ -325,6 +319,28 @@ jobs:
       - name: Run Dart tests
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter test --reporter expanded
+
+      - name: Preserve patched Flutter source for audited customization
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$PROJECT_DIR/torqscan-patch-report.json"
+          test -s "$PROJECT_DIR/test/obd_protocol_test.dart"
+          test -s "$PROJECT_DIR/test/connection_endpoint_test.dart"
+          cd "$PROJECT_DIR/.."
+          zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$(basename "$PROJECT_DIR")"
+          unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'torqscan-patch-report.json'
+          unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/obd_protocol_test.dart'
+          unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/connection_endpoint_test.dart'
+      - name: Upload patched source snapshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: torqscan-flutter-source-snapshot
+          path: ${{ github.workspace }}/torqscan-flutter-source.zip
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build release APK
         working-directory: ${{ env.PROJECT_DIR }}

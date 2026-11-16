@@ -136,8 +136,19 @@ if "android.permission.INTERNET" not in manifest_text:
     errors.append("Android INTERNET permission missing for Wi-Fi TCP")
 if "android.hardware.bluetooth\" android:required=\"false\"" not in manifest_text:
     errors.append("Bluetooth hardware must remain optional because Wi-Fi is also supported")
-if "android.permission.ACCESS_FINE_LOCATION" in manifest_text or "android.permission.ACCESS_COARSE_LOCATION" in manifest_text:
-    errors.append("App manifest must not add a direct location permission for paired-device-only use")
+for permission in (
+    "android.permission.BLUETOOTH_SCAN",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION",
+):
+    direct_declarations = [
+        node for tag in ("uses-permission", "uses-permission-sdk-23")
+        for node in manifest_root.findall(tag)
+        if node.get(android_ns + "name") == permission
+        and node.get(tools_ns + "node") != "remove"
+    ]
+    if direct_declarations:
+        errors.append(f"App manifest retains a direct {permission} declaration instead of a removal marker")
 
 endpoint = source("lib/services/connection_endpoint.dart")
 endpoint_tests = source("test/connection_endpoint_test.dart")

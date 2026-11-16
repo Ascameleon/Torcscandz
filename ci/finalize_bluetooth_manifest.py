@@ -2,6 +2,8 @@
 """Enforce least-privilege permissions after every other source patch has run."""
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -53,4 +55,21 @@ if any(content.count(line) != 1 for line in remove_lines):
 
 MANIFEST.write_text(content, encoding="utf-8")
 ET.parse(MANIFEST)
+
+# The preceding source patch records a hash for every modified file. This
+# final least-privilege pass changes the manifest again, so refresh that one
+# entry before the preflight compares the report with the final source tree.
+REPORT = PROJECT / "torqscan-patch-report.json"
+if REPORT.is_file():
+    try:
+        report = json.loads(REPORT.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"Cannot read TorqScan patch report: {exc}") from exc
+    files = report.get("files")
+    relative_manifest = "android/app/src/main/AndroidManifest.xml"
+    if not isinstance(files, dict) or relative_manifest not in files:
+        raise SystemExit("TorqScan patch report has no Android manifest hash to refresh")
+    files[relative_manifest] = hashlib.sha256(MANIFEST.read_bytes()).hexdigest()
+    REPORT.write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+
 print("Verified paired-device-only manifest: CONNECT retained; SCAN, location and discoverability removed")

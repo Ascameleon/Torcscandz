@@ -3872,7 +3872,7 @@ home_replacements = [
     ),
     ("label: const Text('Connecter en Wi-Fi')", "label: Text(tr(context, 'connect_wifi'))"),
     ("const SnackBar(content: Text('Adresse IP ou port TCP invalide.'))", "SnackBar(content: Text(tr(context, 'wifi_invalid')))"),
-    ("SnackBar(content: Text('Connexion Wi-Fi : $error'))", "SnackBar(content: Text('\${tr(context, 'wifi_connect_failed')}: $error'))"),
+    ("SnackBar(content: Text('Connexion Wi-Fi : $error'))", "SnackBar(content: Text(\"${tr(context, 'wifi_connect_failed')}: $error\"))"),
 ]
 for old, new in home_replacements:
     if old in home_text:

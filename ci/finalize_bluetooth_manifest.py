@@ -71,6 +71,25 @@ if REPORT.exists() and not REPORT.is_file():
     raise SystemExit(f"Patch report is not a regular file: {REPORT}")
 
 content = MANIFEST.read_text(encoding="utf-8")
+
+# Validate the patch report completely before changing the manifest. A malformed
+# or incomplete report must not leave a half-finalized extracted project.
+relative_manifest = "android/app/src/main/AndroidManifest.xml"
+report = None
+if REPORT.exists():
+    try:
+        report = json.loads(REPORT.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"Cannot read TorqScan patch report: {exc}") from exc
+    if not isinstance(report, dict):
+        raise SystemExit("TorqScan patch report root must be a JSON object")
+    files = report.get("files")
+    if not isinstance(files, dict) or relative_manifest not in files:
+        raise SystemExit("TorqScan patch report has no Android manifest hash to refresh")
+    previous_hash = files[relative_manifest]
+    if not isinstance(previous_hash, str) or re.fullmatch(r"[0-9a-f]{64}", previous_hash) is None:
+        raise SystemExit("TorqScan patch report contains an invalid Android manifest SHA-256")
+
 root_match = re.search(r"<manifest\b[^>]*>", content, re.S)
 if root_match is None:
     raise SystemExit("Android manifest root element not found")
@@ -109,25 +128,16 @@ for line in remove_lines:
 if any(content.count(line) != 1 for line in remove_lines):
     raise SystemExit("Unused Bluetooth permission removal markers are missing or duplicated")
 
-# Parse the proposed XML before replacing the original file.
+# Parse the proposed XML and serialize the updated report before either write.
 ET.fromstring(content)
+report_content = None
+if report is not None:
+    report["files"][relative_manifest] = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    report_content = json.dumps(report, indent=2) + "\n"
+
 atomic_write_text(MANIFEST, content)
 ET.parse(MANIFEST)
-
-# The preceding source patch records a hash for every modified file. This
-# final least-privilege pass changes that one entry before preflight verification.
-if REPORT.exists():
-    try:
-        report = json.loads(REPORT.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise SystemExit(f"Cannot read TorqScan patch report: {exc}") from exc
-    if not isinstance(report, dict):
-        raise SystemExit("TorqScan patch report root must be a JSON object")
-    files = report.get("files")
-    relative_manifest = "android/app/src/main/AndroidManifest.xml"
-    if not isinstance(files, dict) or relative_manifest not in files:
-        raise SystemExit("TorqScan patch report has no Android manifest hash to refresh")
-    files[relative_manifest] = hashlib.sha256(content.encode("utf-8")).hexdigest()
-    atomic_write_text(REPORT, json.dumps(report, indent=2) + "\n")
+if report_content is not None:
+    atomic_write_text(REPORT, report_content)
 
 print("Verified paired-device-only manifest: CONNECT retained; SCAN, location and discoverability removed")

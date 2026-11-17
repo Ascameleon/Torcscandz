@@ -172,9 +172,44 @@ def test_rejects_symlinked_patch_report_before_modifying_manifest() -> None:
         assert outside_report.read_bytes() == report_before, "symlink target report must remain untouched"
 
 
+
+
+def test_rejects_invalid_patch_report_before_modifying_manifest() -> None:
+    relative_manifest = "android/app/src/main/AndroidManifest.xml"
+    invalid_reports = (
+        ("{invalid", "Cannot read TorqScan patch report"),
+        (json.dumps({"files": {}}), "no Android manifest hash"),
+        (
+            json.dumps({"files": {relative_manifest: "not-a-sha256"}}),
+            "invalid Android manifest SHA-256",
+        ),
+    )
+
+    for report_content, expected_error in invalid_reports:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            manifest = manifest_path(project)
+            write_valid_manifest(manifest)
+            manifest_before = manifest.read_bytes()
+            report_path = project / "torqscan-patch-report.json"
+            report_path.write_text(report_content, encoding="utf-8")
+            report_before = report_path.read_bytes()
+
+            result = run_finalizer_result(project)
+
+            assert result.returncode != 0, "invalid patch report must be rejected"
+            assert expected_error in result.stderr, result.stderr or result.stdout
+            assert manifest.read_bytes() == manifest_before, (
+                "manifest must remain unchanged when the patch report is invalid"
+            )
+            assert report_path.read_bytes() == report_before, (
+                "invalid patch report must remain unchanged"
+            )
+
 if __name__ == "__main__":
     test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent()
     test_rejects_symlinked_manifest_without_modifying_target()
     test_rejects_symlinked_manifest_parent_without_modifying_target()
     test_rejects_symlinked_patch_report_before_modifying_manifest()
+    test_rejects_invalid_patch_report_before_modifying_manifest()
     print("PASS: manifest permissions are least-privilege, idempotent, and reject symlinked paths")

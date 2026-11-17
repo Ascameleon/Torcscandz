@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -160,7 +159,7 @@ def test_rejects_symlinked_patch_report_before_modifying_manifest() -> None:
         manifest = manifest_path(project)
         write_valid_manifest(manifest)
         outside_report = root / "outside-report.json"
-        outside_report.write_text('{"files": {}}\\n', encoding="utf-8")
+        outside_report.write_text('{"files": {}}', encoding="utf-8")
         report_link = project / "torqscan-patch-report.json"
         report_link.symlink_to(outside_report)
         manifest_before = manifest.read_bytes()

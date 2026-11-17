@@ -18,32 +18,51 @@ pub.write_text(s2)
 bt=p/'lib/services/bluetooth_service.dart'
 s=bt.read_text()
 s=s.replace('  BluetoothConnection? _connection;', '  spp.SppConnection? _connection;')
-s=s.replace("import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';", "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';\nimport 'package:bluetooth_spp/bluetooth_spp.dart' as spp;\nimport 'package:permission_handler/permission_handler.dart';")
+required_imports = (
+    "import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart';",
+    "import 'package:bluetooth_spp/bluetooth_spp.dart' as spp;",
+    "import 'package:permission_handler/permission_handler.dart';",
+    "import 'bluetooth_permission_policy.dart';",
+)
+import_uris = (
+    "package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart",
+    "package:bluetooth_spp/bluetooth_spp.dart",
+    "package:permission_handler/permission_handler.dart",
+    "bluetooth_permission_policy.dart",
+)
+# Normalize by library URI, not the full import directive: the recovered
+# archive may already import the same library with a show/as clause.
+for import_uri in import_uris:
+    pattern = re.compile(
+        r"(?m)^[ \t]*import[ \t]+['\"]" + re.escape(import_uri)
+        + r"['\"][^;\r\n]*;[ \t]*(?:\r?\n|$)"
+    )
+    s = pattern.sub("", s)
+# Remove an import already re-exported by flutter/foundation.dart.
+s = re.sub(r"(?m)^[ \t]*import[ \t]+['\"]dart:typed_data['\"];[ \t]*(?:\r?\n|$)", "", s)
+first_import = re.search(r"(?m)^import[ \t]+.*?;[ \t]*$", s)
+if first_import is None:
+    raise SystemExit("Bluetooth service has no import section")
+s = s[:first_import.end()] + "\n" + "\n".join(required_imports) + s[first_import.end():]
+if any(s.count(import_line) != 1 for import_line in required_imports):
+    raise SystemExit("Bluetooth service imports are missing or duplicated")
 start=s.index('  Future<bool> requestPermissions() async {')
 end=s.index('\n  Future<bool> isBluetoothEnabled()',start)
 method="""  Future<bool> requestPermissions() async {
     if (defaultTargetPlatform != TargetPlatform.android) return true;
     try {
       final status = await spp.BluetoothSpp.instance.permissionsStatus();
-      if (status.allGranted) return true;
-      final requested = <Permission>[
-        if (status.sdkInt >= 31) ...[
-          Permission.bluetoothConnect,
-          Permission.bluetoothScan,
-        ] else
-          Permission.locationWhenInUse,
-      ];
-      await requested.request();
-      final refreshed = await spp.BluetoothSpp.instance.permissionsStatus();
-      if (!refreshed.allGranted) {
-        _errorMessage = 'Autorisations Bluetooth manquantes : ${refreshed.missing.join(', ')}';
+      if (!requiresBluetoothConnectPermission(status.sdkInt)) return true;
+      final permission = await Permission.bluetoothConnect.request();
+      if (!permission.isGranted) {
+        _errorMessage = 'Autorisation Bluetooth CONNECT manquante.';
         _state = BluetoothConnectionState.error;
         notifyListeners();
         return false;
       }
       return true;
     } catch (e) {
-      _errorMessage = 'Impossible d’obtenir les autorisations Bluetooth : $e';
+      _errorMessage = 'Impossible d’obtenir l’autorisation Bluetooth CONNECT : $e';
       _state = BluetoothConnectionState.error;
       notifyListeners();
       return false;
@@ -120,9 +139,67 @@ write_method="""  Future<void> write(String data) async {
 """
 s=s[:write_start]+write_method+s[write_end:]
 bt.write_text(s)
+
+policy=p/'lib/services/bluetooth_permission_policy.dart'
+policy.parent.mkdir(parents=True, exist_ok=True)
+policy.write_text("""/// Paired-device SPP access needs BLUETOOTH_CONNECT on Android 12+ only.
+/// BLUETOOTH_SCAN is reserved for discovery, which this app does not perform.
+bool requiresBluetoothConnectPermission(int sdkInt) => sdkInt >= 31;
+""")
+
+policy_test=p/'test/bluetooth_permission_policy_test.dart'
+policy_test.parent.mkdir(parents=True, exist_ok=True)
+policy_test.write_text("""import 'package:flutter_test/flutter_test.dart';
+import 'package:torqscan/services/bluetooth_permission_policy.dart';
+
+void main() {
+  group('paired-device Bluetooth permission policy', () {
+    test('does not request runtime scan/location permission on Android 11 and earlier', () {
+      expect(requiresBluetoothConnectPermission(23), isFalse);
+      expect(requiresBluetoothConnectPermission(30), isFalse);
+    });
+
+    test('requires only Bluetooth CONNECT on Android 12 and later', () {
+      expect(requiresBluetoothConnectPermission(31), isTrue);
+      expect(requiresBluetoothConnectPermission(35), isTrue);
+    });
+  });
+}
+""")
+
 manifest=p/'android/app/src/main/AndroidManifest.xml'
 m=manifest.read_text()
-if 'android.permission.BLUETOOTH_SCAN' not in m:
-    m=m.replace('    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />', '    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />')
-manifest.write_text(m)
-print('Bluetooth permissions, RFCOMM timeout and cleanup patched; compatible permission_handler pinned')
+root_match=re.search(r'<manifest\b[^>]*>', m, re.S)
+if root_match is None:
+    raise SystemExit('Android manifest root element not found')
+root_tag=root_match.group(0)
+if 'xmlns:tools=' not in root_tag:
+    updated_root=root_tag[:-1]+' xmlns:tools="http://schemas.android.com/tools">'
+    m=m[:root_match.start()]+updated_root+m[root_match.end():]
+# This app connects only to already-paired SPP adapters; it never discovers devices.
+# Remove scan/location declarations contributed by plugin manifests.
+for permission in (
+    'android.permission.BLUETOOTH_SCAN',
+    'android.permission.ACCESS_FINE_LOCATION',
+    'android.permission.ACCESS_COARSE_LOCATION',
+):
+    pattern = r'(?m)^\s*<uses-permission\b(?=[^>]*android:name="' + re.escape(permission) + r'")[^>]*/>\s*\n?'
+    m = re.sub(pattern, '', m)
+remove_lines = [
+    '    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" tools:node="remove" />',
+    '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />',
+    '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />',
+]
+connect='    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />'
+if connect not in m:
+    raise SystemExit('BLUETOOTH_CONNECT manifest anchor not found')
+for remove_line in remove_lines:
+    if remove_line not in m:
+        m=m.replace(connect, connect+'\n'+remove_line, 1)
+if any(m.count(remove_line) != 1 for remove_line in remove_lines):
+    raise SystemExit('Bluetooth scan/location permissions were not removed exactly once')
+import xml.etree.ElementTree as ET
+ET.fromstring(m)
+manifest.write_text(m, encoding='utf-8')
+ET.parse(manifest)
+print('Bluetooth paired-device least-privilege manifest written and parsed; RFCOMM timeout and cleanup patched; permission policy tests installed')

@@ -9,6 +9,9 @@ on:
       - '.github/workflows/android-apk.yml'
       - 'ci/patch_torqscan.py'
       - 'ci/patch_bluetooth.py'
+      - 'ci/torqscan_preflight.py'
+      - 'ci/finalize_bluetooth_manifest.py'
+      - 'ci/test_finalize_bluetooth_manifest.py'
   push:
     branches: [main]
     paths:
@@ -17,6 +20,9 @@ on:
       - '.github/workflows/android-apk.yml'
       - 'ci/patch_torqscan.py'
       - 'ci/patch_bluetooth.py'
+      - 'ci/torqscan_preflight.py'
+      - 'ci/finalize_bluetooth_manifest.py'
+      - 'ci/test_finalize_bluetooth_manifest.py'
   workflow_dispatch:
 
 permissions:
@@ -289,6 +295,13 @@ jobs:
 
       - name: Apply audited Dart source fixes
         run: python3 "$GITHUB_WORKSPACE/ci/patch_torqscan.py" "$PROJECT_DIR"
+      - name: Test and finalize paired-device Android manifest permissions
+        run: |
+          python3 "$GITHUB_WORKSPACE/ci/test_finalize_bluetooth_manifest.py"
+          python3 "$GITHUB_WORKSPACE/ci/finalize_bluetooth_manifest.py" "$PROJECT_DIR"
+
+      - name: Run source-only TorqScan preflight
+        run: python3 "$GITHUB_WORKSPACE/ci/torqscan_preflight.py" "$PROJECT_DIR"
 
       - name: Verify Bluetooth RFCOMM write API
         shell: bash
@@ -329,7 +342,18 @@ jobs:
           test -s "$PROJECT_DIR/test/obd_protocol_test.dart"
           test -s "$PROJECT_DIR/test/connection_endpoint_test.dart"
           cd "$PROJECT_DIR/.."
-          zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$(basename "$PROJECT_DIR")"
+          project_name="$(basename "$PROJECT_DIR")"
+          zip -qr "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" "$project_name" \
+            -x "$project_name/build/*" \
+               "$project_name/.dart_tool/*" \
+               "$project_name/android/.gradle/*" \
+               "$project_name/android/local.properties" \
+               "$project_name/.flutter-plugins" \
+               "$project_name/.flutter-plugins-dependencies"
+          if unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Eq '(^|/)(build|.dart_tool|.gradle)/'; then
+            echo '::error::Generated Flutter/Gradle build caches must not be included in the source snapshot.' >&2
+            exit 1
+          fi
           unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'torqscan-patch-report.json'
           unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/obd_protocol_test.dart'
           unzip -Z1 "$GITHUB_WORKSPACE/torqscan-flutter-source.zip" | grep -Fq 'test/connection_endpoint_test.dart'
@@ -381,6 +405,15 @@ jobs:
           sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
           "$apksigner" verify --verbose "$apk"
+          aapt="$(find "$sdk_root/build-tools" -type f -name aapt -print | sort -V | tail -n 1)"
+          permissions="$("$aapt" dump permissions "$apk")"
+          printf '%s\n' "$permissions"
+          grep -q 'android.permission.BLUETOOTH_CONNECT' <<< "$permissions"
+          grep -q 'android.permission.INTERNET' <<< "$permissions"
+          if grep -Eq 'android.permission.BLUETOOTH_SCAN|android.permission.ACCESS_FINE_LOCATION|android.permission.ACCESS_COARSE_LOCATION|android.permission.REQUEST_DISCOVERABLE' <<< "$permissions"; then
+            echo '::error::Paired-device-only APK unexpectedly requests scan, location or discoverability permission.'
+            exit 1
+          fi
           unzip -t "$apk" >/dev/null
           sha256sum "$apk"
           ls -lh "$apk"

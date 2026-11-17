@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -21,17 +22,14 @@ REMOVED = (
 )
 
 
-def run_finalizer(project: Path) -> None:
-    subprocess.run([sys.executable, str(SCRIPT), str(project)], check=True, capture_output=True, text=True)
+def manifest_path(project: Path) -> Path:
+    return project / "android/app/src/main/AndroidManifest.xml"
 
 
-def test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        project = Path(temporary)
-        manifest = project / "android/app/src/main/AndroidManifest.xml"
-        manifest.parent.mkdir(parents=True)
-        manifest.write_text(
-            """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+def write_valid_manifest(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        """<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
@@ -39,8 +37,29 @@ def test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent() -> N
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>
 """,
-            encoding="utf-8",
-        )
+        encoding="utf-8",
+    )
+
+
+def run_finalizer_result(project: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), str(project)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def run_finalizer(project: Path) -> None:
+    result = run_finalizer_result(project)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        project = Path(temporary)
+        manifest = manifest_path(project)
+        write_valid_manifest(manifest)
         report_path = project / "torqscan-patch-report.json"
         report_path.write_text(
             json.dumps({
@@ -89,6 +108,74 @@ def test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent() -> N
         )
 
 
+def assert_symlink_rejected(result: subprocess.CompletedProcess[str]) -> None:
+    assert result.returncode != 0, "finalizer must reject symlinked project paths"
+    assert "symbolic link" in result.stderr.lower(), result.stderr or result.stdout
+
+
+def test_rejects_symlinked_manifest_without_modifying_target() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        project = root / "project"
+        outside = root / "outside-manifest.xml"
+        project.mkdir()
+        outside.write_text(
+            '<manifest xmlns:android="http://schemas.android.com/apk/res/android"/>',
+            encoding="utf-8",
+        )
+        manifest = manifest_path(project)
+        manifest.parent.mkdir(parents=True)
+        manifest.symlink_to(outside)
+        before = outside.read_bytes()
+
+        result = run_finalizer_result(project)
+
+        assert_symlink_rejected(result)
+        assert outside.read_bytes() == before, "symlink target must remain untouched"
+
+
+def test_rejects_symlinked_manifest_parent_without_modifying_target() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        project = root / "project"
+        outside_android = root / "outside-android"
+        project.mkdir()
+        outside_manifest = manifest_path(outside_android)
+        write_valid_manifest(outside_manifest)
+        android_link = project / "android"
+        android_link.symlink_to(outside_android, target_is_directory=True)
+        before = outside_manifest.read_bytes()
+
+        result = run_finalizer_result(project)
+
+        assert_symlink_rejected(result)
+        assert outside_manifest.read_bytes() == before, "symlinked parent target must remain untouched"
+
+
+def test_rejects_symlinked_patch_report_before_modifying_manifest() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        project = root / "project"
+        project.mkdir()
+        manifest = manifest_path(project)
+        write_valid_manifest(manifest)
+        outside_report = root / "outside-report.json"
+        outside_report.write_text('{"files": {}}\\n', encoding="utf-8")
+        report_link = project / "torqscan-patch-report.json"
+        report_link.symlink_to(outside_report)
+        manifest_before = manifest.read_bytes()
+        report_before = outside_report.read_bytes()
+
+        result = run_finalizer_result(project)
+
+        assert_symlink_rejected(result)
+        assert manifest.read_bytes() == manifest_before, "manifest must not be changed when report path is unsafe"
+        assert outside_report.read_bytes() == report_before, "symlink target report must remain untouched"
+
+
 if __name__ == "__main__":
     test_removes_unused_bluetooth_discovery_permissions_and_is_idempotent()
-    print("PASS: Android manifest finalizer removes unused discovery/discoverability permissions and is idempotent")
+    test_rejects_symlinked_manifest_without_modifying_target()
+    test_rejects_symlinked_manifest_parent_without_modifying_target()
+    test_rejects_symlinked_patch_report_before_modifying_manifest()
+    print("PASS: manifest permissions are least-privilege, idempotent, and reject symlinked paths")

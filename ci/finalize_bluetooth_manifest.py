@@ -71,11 +71,11 @@ if REPORT.exists() and not REPORT.is_file():
     raise SystemExit(f"Patch report is not a regular file: {REPORT}")
 
 content = MANIFEST.read_text(encoding="utf-8")
-root_match = re.search(r"<manifest\\b[^>]*>", content, re.S)
+root_match = re.search(r"<manifest\b[^>]*>", content, re.S)
 if root_match is None:
     raise SystemExit("Android manifest root element not found")
 root_tag = root_match.group(0)
-if not re.search(r"\\bxmlns:tools\\s*=", root_tag):
+if not re.search(r"\bxmlns:tools\s*=", root_tag):
     updated_root = root_tag[:-1] + ' xmlns:tools="http://schemas.android.com/tools">'
     content = content[:root_match.start()] + updated_root + content[root_match.end():]
 
@@ -86,12 +86,12 @@ permissions = (
     "android.permission.REQUEST_DISCOVERABLE",
 )
 for permission in permissions:
-    # Restrict whitespace to the current line; \\s would consume indentation
+    # Restrict whitespace to the current line; \s would consume indentation
     # from the following XML element and make repeated runs non-idempotent.
     pattern = re.compile(
-        r'(?m)^[ \\t]*<uses-permission\\b(?=[^>]*android:name="'
+        r'(?m)^[ \t]*<uses-permission\b(?=[^>]*android:name="'
         + re.escape(permission)
-        + r'")[^>]*/>[ \\t]*(?:\\r?\\n|$)'
+        + r'")[^>]*/>[ \t]*(?:\r?\n|$)'
     )
     content = pattern.sub("", content)
 
@@ -105,7 +105,7 @@ remove_lines = [
 ]
 for line in remove_lines:
     if line not in content:
-        content = content.replace(connect, connect + "\\n" + line, 1)
+        content = content.replace(connect, connect + "\n" + line, 1)
 if any(content.count(line) != 1 for line in remove_lines):
     raise SystemExit("Unused Bluetooth permission removal markers are missing or duplicated")
 
@@ -115,8 +115,7 @@ atomic_write_text(MANIFEST, content)
 ET.parse(MANIFEST)
 
 # The preceding source patch records a hash for every modified file. This
-# final least-privilege pass changes the manifest again, so refresh that one
-# entry before the preflight compares the report with the final source tree.
+# final least-privilege pass changes that one entry before preflight verification.
 if REPORT.exists():
     try:
         report = json.loads(REPORT.read_text(encoding="utf-8"))
@@ -129,6 +128,6 @@ if REPORT.exists():
     if not isinstance(files, dict) or relative_manifest not in files:
         raise SystemExit("TorqScan patch report has no Android manifest hash to refresh")
     files[relative_manifest] = hashlib.sha256(content.encode("utf-8")).hexdigest()
-    atomic_write_text(REPORT, json.dumps(report, indent=2) + "\\n")
+    atomic_write_text(REPORT, json.dumps(report, indent=2) + "\n")
 
 print("Verified paired-device-only manifest: CONNECT retained; SCAN, location and discoverability removed")
